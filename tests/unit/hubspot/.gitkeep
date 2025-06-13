@@ -1,0 +1,3 @@
+# This file is used to ensure the directory is tracked by Git.
+# Add unit tests for HubSpot interaction modules (client, companies, contacts, invoices) here.
+# These tests should mock HubSpot API calls.

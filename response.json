@@ -1,0 +1,1 @@
+{"statusCode":500,"body":"{\"message\":\"Critical error in HubSpot Invoicing Lambda.\",\"error\":\"Cannot read properties of undefined (reading 'objects')\"}"}
