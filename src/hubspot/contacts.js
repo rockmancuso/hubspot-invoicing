@@ -17,10 +17,12 @@ const getPrimaryContact = async (hubspotClient, companyId) => {
     const toObjectType = 'contact';
     let primaryContactId = null;
 
-    // Get all contact associations for this company
-    const associationsResponse = await hubspotClient.crm.companies.associationsApi.getAll(
-      companyId,
-      toObjectType
+    const associationsResponse = await hubspotClient.crm.associations.v4.basicApi.getPage(
+      'companies',      // fromObjectType
+      companyId,        // fromObjectId
+      'contacts',       // toObjectType
+      undefined,        // after (pagination)
+      100               // limit (adjust as needed)
     );
 
     if (!associationsResponse.results?.length) {

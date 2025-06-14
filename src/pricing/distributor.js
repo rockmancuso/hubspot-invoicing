@@ -3,52 +3,37 @@ const config = require('../config');
 const logger = require('../utils/logger');
 
 /**
- * Calculates the total invoice amount for a Distributor membership.
- *
- * Base fee: from config.DISTRIBUTOR_BASE_FEE
- * Additional charge: from config.DISTRIBUTOR_PER_TERRITORY_FEE per territory
- * Territory counts are read from HubSpot properties defined in config.
+ * Calculates the total invoice amount for a Distributor membership by counting
+ * items from multi-checkbox properties.
  *
  * @param {object} companyProperties - The HubSpot company properties object.
- *                                   Expected to contain properties like those defined in
- *                                   config.HUBSPOT_DISTRIBUTOR_US_STATES_PROPERTY, etc.
  * @returns {{totalPrice: number, lineItems: Array<object>, details: object}}
- *           An object containing the total price, line items for the invoice, and calculation details.
- * @throws {Error} If required configuration for property names is missing.
  */
 const calculateDistributorPrice = (companyProperties) => {
-  const baseFee = config.DISTRIBUTOR_BASE_FEE;
-  const perTerritoryCharge = config.DISTRIBUTOR_PER_TERRITORY_FEE;
+  const baseFee = config.DISTRIBUTOR_BASE_FEE || 929;
+  const perTerritoryCharge = config.DISTRIBUTOR_PER_TERRITORY_FEE || 70;
 
-  const usStatesProperty = config.HUBSPOT_DISTRIBUTOR_US_STATES_PROPERTY;
-  const canadianProvincesProperty = config.HUBSPOT_DISTRIBUTOR_CAN_PROVINCES_PROPERTY;
-  const nonNATerritoriesProperty = config.HUBSPOT_DISTRIBUTOR_NON_NA_TERRITORIES_PROPERTY;
+  // Get the property names from config
+  const usStatesProperty = config.HUBSPOT_DISTRIBUTOR_US_STATES_CHECKBOX_PROPERTY;
+  const canadianProvincesProperty = config.HUBSPOT_DISTRIBUTOR_CAN_PROVINCES_CHECKBOX_PROPERTY;
+  const nonNATerritoriesProperty = config.HUBSPOT_DISTRIBUTOR_NON_NA_TERRITORIES_CHECKBOX_PROPERTY;
 
-  if (!usStatesProperty || !canadianProvincesProperty || !nonNATerritoriesProperty) {
-    const errorMessage = 'Missing configuration for distributor territory properties.';
-    logger.error(errorMessage, {
-        usStatesProperty, canadianProvincesProperty, nonNATerritoriesProperty
-    });
-    throw new Error(errorMessage);
-  }
+  // Get the string values from the company properties (e.g., "CA;NV;AZ")
+  const usStatesString = companyProperties[usStatesProperty] || '';
+  const canadianProvincesString = companyProperties[canadianProvincesProperty] || '';
+  const nonNATerritoriesString = companyProperties[nonNATerritoriesProperty] || '';
 
-  const usStatesCount = parseInt(companyProperties[usStatesProperty], 10) || 0;
-  const canadianProvincesCount = parseInt(companyProperties[canadianProvincesProperty], 10) || 0;
-  const nonNATerritoriesCount = parseInt(companyProperties[nonNATerritoriesProperty], 10) || 0;
+  // --- THIS IS THE NEW LOGIC ---
+  // Count the number of selected items by splitting the string by the semicolon delimiter.
+  // If the string is empty, this safely results in a count of 0.
+  const usStatesCount = usStatesString ? usStatesString.split(';').length : 0;
+  const canadianProvincesCount = canadianProvincesString ? canadianProvincesString.split(';').length : 0;
+  const nonNATerritoriesCount = nonNATerritoriesString ? nonNATerritoriesString.split(';').length : 0;
 
-  if (companyProperties[usStatesProperty] === undefined) {
-    logger.warn(`Property ${usStatesProperty} is undefined for company. Assuming 0 US states.`, { companyId: companyProperties.hs_object_id });
-  }
-  if (companyProperties[canadianProvincesProperty] === undefined) {
-    logger.warn(`Property ${canadianProvincesProperty} is undefined for company. Assuming 0 Canadian provinces.`, { companyId: companyProperties.hs_object_id });
-  }
-  if (companyProperties[nonNATerritoriesProperty] === undefined) {
-    logger.warn(`Property ${nonNATerritoriesProperty} is undefined for company. Assuming 0 non-NA territories.`, { companyId: companyProperties.hs_object_id });
-  }
-
+  // The rest of the math remains identical
   const totalTerritories = usStatesCount + canadianProvincesCount + nonNATerritoriesCount;
   const additionalTerritories = Math.max(0, totalTerritories - 1);
-  const territoriesCharge = totalTerritories * perTerritoryCharge;
+  const territoriesCharge = additionalTerritories * perTerritoryCharge;
   const totalPrice = baseFee + territoriesCharge;
 
   const lineItems = [
@@ -56,34 +41,27 @@ const calculateDistributorPrice = (companyProperties) => {
       name: 'Distributor Membership Base Fee',
       quantity: 1,
       price: baseFee,
-      description: `Annual base fee for Distributor Membership.`,
-      // hs_product_id: config.HUBSPOT_PRODUCT_ID_DISTRIBUTOR_BASE, // If configured
+      description: 'Annual base fee for Distributor Membership (includes 1st territory).',
     },
   ];
 
-  if (totalTerritories > 0) {
+  if (additionalTerritories > 0) {
     lineItems.push({
-      name: `Membership Territory Charges`,
-      quantity: totalTerritories,
+      name: `Additional Membership Territory Charges`,
+      quantity: additionalTerritories,
       price: perTerritoryCharge,
-      description: `Charge for ${totalTerritories} territories (${usStatesCount} US, ${canadianProvincesCount} CAN, ${nonNATerritoriesCount} Non-NA) at $${perTerritoryCharge} per territory.`,
-      // hs_product_id: config.HUBSPOT_PRODUCT_ID_DISTRIBUTOR_TERRITORY, // If configured
+      // The description can be enhanced later in index.js to list the states
+      description: `Charge for ${additionalTerritories} additional territories.`, 
     });
   }
   
   const calculationDetails = {
     membershipType: 'Distributor',
-    baseFee,
-    perTerritoryCharge,
-    usStatesCount,
-    canadianProvincesCount,
-    nonNATerritoriesCount,
-    totalTerritories,
-    territoriesCharge,
     totalPrice,
+    // You can add more details here for reporting if needed
   };
 
-  logger.info(`Distributor price calculated for company ${companyProperties.hs_object_id || 'N/A'}`, calculationDetails);
+  logger.info(`Distributor price calculated for company ${companyProperties.name}`, calculationDetails);
 
   return {
     totalPrice,
@@ -92,4 +70,4 @@ const calculateDistributorPrice = (companyProperties) => {
   };
 };
 
-module.exports = calculateDistributorPrice;
+module.exports = calculateDistributorPrice; 

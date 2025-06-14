@@ -123,11 +123,34 @@ exports.handler = async (event, context) => {
         const companyMembershipType = memberInfo.properties[config.HUBSPOT_MEMBERSHIP_TYPE_PROPERTY];
 
         switch (member.type === 'Company' ? companyMembershipType : 'Individual') {
-          case config.MEMBERSHIP_TYPE_DISTRIBUTOR:      priceResult = calculateDistributorPrice(memberInfo.properties);    break;
-          case config.MEMBERSHIP_TYPE_MANUFACTURER:     priceResult = calculateManufacturerPrice(memberInfo.properties);   break;
-          case config.MEMBERSHIP_TYPE_SERVICE_PROVIDER: priceResult = calculateServiceProviderPrice(memberInfo.properties);break;
-          case 'Individual':                            priceResult = calculateIndividualPrice(memberInfo.properties);    break;
-          default: throw new Error(`Unknown membership type: ${companyMembershipType || 'Individual'}`);
+          case config.MEMBERSHIP_TYPE_DISTRIBUTOR:
+            priceResult = calculateDistributorPrice(memberInfo.properties);
+            // NEW: Enhance the line item description with the list of additional territories
+            const allTerritoryNames = [
+                ...(memberInfo.properties[config.HUBSPOT_DISTRIBUTOR_US_STATES_CHECKBOX_PROPERTY] || '').split(';'),
+                ...(memberInfo.properties[config.HUBSPOT_DISTRIBUTOR_CAN_PROVINCES_CHECKBOX_PROPERTY] || '').split(';'),
+                ...(memberInfo.properties[config.HUBSPOT_DISTRIBUTOR_NON_NA_TERRITORIES_CHECKBOX_PROPERTY] || '').split(';')
+            ].filter(Boolean); // .filter(Boolean) removes any empty strings from the array
+
+            const additionalTerritoryNames = allTerritoryNames.slice(1);
+            if (additionalTerritoryNames.length > 0) {
+                const territoryLineItem = priceResult.lineItems.find(item => item.name.includes('Additional'));
+                if (territoryLineItem) {
+                    territoryLineItem.description = `For additional territories: ${additionalTerritoryNames.join(', ')}`;
+                }
+            }
+            break;
+          case config.MEMBERSHIP_TYPE_MANUFACTURER:
+            priceResult = calculateManufacturerPrice(memberInfo.properties);
+            break;
+          case config.MEMBERSHIP_TYPE_SERVICE_PROVIDER:
+            priceResult = calculateServiceProviderPrice(memberInfo.properties);
+            break;
+          case 'Individual':
+            priceResult = calculateIndividualPrice(memberInfo.properties);
+            break;
+          default:
+            throw new Error(`Unknown membership type: ${companyMembershipType || 'Individual'}`);
         }
         logger.info(`Invoice amount for ${memberInfo.name}: $${priceResult.totalPrice}`);
 

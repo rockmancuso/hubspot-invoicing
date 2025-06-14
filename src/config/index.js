@@ -13,7 +13,7 @@ const config = {
   HUBSPOT_API_KEY_SECRET_ID: process.env.HUBSPOT_API_KEY_SECRET_ID || 'HubSpotApiKey', // Name/ARN of the secret in Secrets Manager
 
   // HubSpot Company Properties (Internal Names)
-  HUBSPOT_NEXT_RENEWAL_DATE_PROPERTY: process.env.HUBSPOT_NEXT_RENEWAL_DATE_PROPERTY || 'next_renewal_date',
+  HUBSPOT_NEXT_RENEWAL_DATE_PROPERTY: process.env.HUBSPOT_NEXT_RENEWAL_DATE_PROPERTY || 'paid_through_date',
   HUBSPOT_MEMBERSHIP_TYPE_PROPERTY: process.env.HUBSPOT_MEMBERSHIP_TYPE_PROPERTY || 'membership_type',
   HUBSPOT_COMPANY_MEMBERSHIP_DUES_PROPERTY: process.env.HUBSPOT_COMPANY_MEMBERSHIP_DUES_PROPERTY || 'membership_dues_invoiced_amount',
 

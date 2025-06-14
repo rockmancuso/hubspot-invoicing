@@ -23,7 +23,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@hubspot/api-client": "^11.1.0",
+    "@hubspot/api-client": "^13.0.0",
     "@sparticuz/chromium": "^137.0.0",
     "aws-sdk": "^2.1641.0",
     "puppeteer-core": "^24.10.1"
