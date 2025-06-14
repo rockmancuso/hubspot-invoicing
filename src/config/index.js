@@ -29,6 +29,22 @@ const config = {
   HUBSPOT_PRIMARY_CONTACT_ASSOCIATION_TYPE_ID: process.env.HUBSPOT_PRIMARY_CONTACT_ASSOCIATION_TYPE_ID, // e.g., '2' (numeric ID for 'company_to_contact' if it's primary)
   HUBSPOT_CONTACT_PROPERTIES_TO_FETCH: process.env.HUBSPOT_CONTACT_PROPERTIES_TO_FETCH || 'email,firstname,lastname',
 
+  // BEGIN NEW CONFIGS
+  
+  // HubSpot Individual Membership Properties
+  HUBSPOT_INDIVIDUAL_PAID_THROUGH_DATE_PROPERTY: process.env.HUBSPOT_INDIVIDUAL_PAID_THROUGH_DATE_PROPERTY || 'paid_through_date',
+
+  // HubSpot Invoice Object Custom Properties
+  HUBSPOT_INVOICE_PDF_LINK_PROPERTY: process.env.HUBSPOT_INVOICE_PDF_LINK_PROPERTY || 'printable_invoice_url', // The internal name of your new custom property
+
+  // Membership Types
+  MEMBERSHIP_TYPE_INDIVIDUAL: process.env.MEMBERSHIP_TYPE_INDIVIDUAL || 'Individual',
+  
+  // Pricing Configuration
+  INDIVIDUAL_MEMBERSHIP_FEE: parseFloat(process.env.INDIVIDUAL_MEMBERSHIP_FEE) || 350,
+  
+  // END NEW CONFIGS
+
   // HubSpot Invoice Object and Properties
   HUBSPOT_INVOICE_OBJECT_TYPE_ID: process.env.HUBSPOT_INVOICE_OBJECT_TYPE_ID || 'invoice', // The object type ID for Invoices (e.g., 'p_invoice' or a numeric ID for custom objects)
   HUBSPOT_INVOICE_AMOUNT_PROPERTY: process.env.HUBSPOT_INVOICE_AMOUNT_PROPERTY || 'hs_invoice_amount',

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"; font-size: 11px; color: #333; }
+        .invoice-container { max-width: 800px; margin: auto; padding: 20px; }
+        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; }
+        .header .logo-address { flex: 1; }
+        .header .logo { max-width: 250px; margin-bottom: 20px; }
+        .header .company-address { font-size: 11px; line-height: 1.5; }
+        .header .invoice-title { font-size: 36px; font-weight: bold; color: #333; text-align: right; }
+        .billing-info { display: flex; justify-content: space-between; margin-bottom: 40px; }
+        .bill-to {
+            position: absolute;
+            top: 1.5in; /* Position for window envelope */
+            left: 0.5in;  /* Position for window envelope */
+            line-height: 1.5;
+        }
+        .invoice-details { text-align: right; line-height: 1.6; }
+        .invoice-details strong { color: #555; }
+        .items-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        .items-table th, .items-table td { border-bottom: 1px solid #ddd; padding: 12px 8px; text-align: left; }
+        .items-table th { background-color: #f7f7f7; font-weight: bold; text-transform: uppercase; font-size: 10px; }
+        .items-table .amount, .items-table .price { text-align: right; }
+        .summary-table { width: 45%; margin-left: auto; margin-top: 20px; border-collapse: collapse; }
+        .summary-table td { padding: 10px; border-bottom: 1px solid #eee; }
+        .summary-table .label { text-align: left; }
+        .summary-table .value { text-align: right; }
+        .summary-table .total td { font-weight: bold; font-size: 14px; border-top: 2px solid #333; border-bottom: none; }
+        .comments { font-size: 10px; color: #777; margin-top: 40px; line-height: 1.4; border-top: 1px solid #ddd; padding-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="invoice-container">
+        <div class="header">
+            <div class="logo-address">
+                <img src="data:image/png;base64,{{logo_base64}}" alt="Logo" class="logo">
+                <div class="company-address">
+                    <strong>CLA</strong><br>
+                    17W635 Butterfield Road, Suite 145<br>
+                    Oakbrook Terrace, IL 60181<br>
+                    United States
+                </div>
+            </div>
+            <div class="invoice-title">Invoice</div>
+        </div>
+
+        <div class="billing-info">
+            <div class="bill-to">
+                <strong>Bill to</strong><br>
+                {{{bill_to_address}}}
+            </div>
+            <div class="invoice-details">
+                <strong>Invoice number</strong> {{invoice_number}}<br>
+                <strong>Invoice date</strong> {{invoice_date}}<br>
+                <strong>Due date</strong> {{due_date}}
+            </div>
+        </div>
+
+        <table class="items-table">
+            <thead>
+                <tr>
+                    <th>Products & Services</th>
+                    <th class="qty" style="text-align: center;">Qty</th>
+                    <th class="price">Unit Price</th>
+                    <th class="amount">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{{line_items}}}
+            </tbody>
+        </table>
+
+        <table class="summary-table">
+            <tr>
+                <td class="label">Subtotal</td>
+                <td class="value">{{subtotal}}</td>
+            </tr>
+            <tr class="total">
+                <td class="label">Total</td>
+                <td class="value">{{total}}</td>
+            </tr>
+            <tr class="total">
+                <td class="label">Balance due</td>
+                <td class="value">{{balance_due}}</td>
+            </tr>
+        </table>
+
+        <div class="comments">
+            <strong>Comments</strong><br>
+            95% of CLA dues may qualify as a tax deductible business expense (Consult a tax advisor for information).<br>
+            Dues are not refundable. Membership are not transferable.<br>
+            All fees are listed in USD and are subject to sales tax (as applicable).
+        </div>
+    </div>
+</body>
+</html>

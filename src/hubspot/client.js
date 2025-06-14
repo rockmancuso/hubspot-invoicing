@@ -63,7 +63,7 @@ const getClient = async () => {
 
   try {
     const apiKey = await getApiKey();
-    clientInstance = new hubspot.Client({ apiKey: apiKey });
+    clientInstance = new hubspot.Client({ accessToken: apiKey });
     logger.info('HubSpot client initialized successfully.');
     return clientInstance;
   } catch (error) {

@@ -47,6 +47,7 @@ const calculateDistributorPrice = (companyProperties) => {
   }
 
   const totalTerritories = usStatesCount + canadianProvincesCount + nonNATerritoriesCount;
+  const additionalTerritories = Math.max(0, totalTerritories - 1);
   const territoriesCharge = totalTerritories * perTerritoryCharge;
   const totalPrice = baseFee + territoriesCharge;
 
