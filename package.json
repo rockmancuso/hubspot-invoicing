@@ -26,7 +26,8 @@
     "@hubspot/api-client": "^13.0.0",
     "@sparticuz/chromium": "^137.0.0",
     "aws-sdk": "^2.1641.0",
-    "puppeteer-core": "^24.10.1"
+    "puppeteer-core": "^24.10.1",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {}
 }
