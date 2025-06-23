@@ -8,7 +8,7 @@ const logger = require('../utils/logger');
  * @returns {{totalPrice: number, lineItems: Array<object>, details: object}}
  */
 const calculateIndividualPrice = (contactProperties) => {
-  const flatRate = config.INDIVIDUAL_MEMBERSHIP_FEE || 350;
+  const flatRate = config.INDIVIDUAL_MEMBERSHIP_FEE || 349;
 
   const lineItems = [
     {
@@ -16,6 +16,8 @@ const calculateIndividualPrice = (contactProperties) => {
       quantity: 1,
       price: flatRate,
       description: `Annual fee for Individual Membership.`,
+      productId: '2695542944', // $349 (Membership RENEWAL) product ID
+      billing_frequency: 'One-Time'
     },
   ];
 

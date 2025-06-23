@@ -15,12 +15,17 @@ const config = {
   // HubSpot Company Properties (Internal Names)
   HUBSPOT_NEXT_RENEWAL_DATE_PROPERTY: process.env.HUBSPOT_NEXT_RENEWAL_DATE_PROPERTY || 'paid_through_date',
   HUBSPOT_MEMBERSHIP_TYPE_PROPERTY: process.env.HUBSPOT_MEMBERSHIP_TYPE_PROPERTY || 'membership_type',
-  HUBSPOT_COMPANY_MEMBERSHIP_DUES_PROPERTY: process.env.HUBSPOT_COMPANY_MEMBERSHIP_DUES_PROPERTY || 'membership_dues_invoiced_amount',
+  HUBSPOT_COMPANY_MEMBERSHIP_DUES_PROPERTY: process.env.HUBSPOT_COMPANY_MEMBERSHIP_DUES_PROPERTY || 'membership_dues',
 
   // HubSpot Distributor Membership Properties
   HUBSPOT_DISTRIBUTOR_US_STATES_PROPERTY: process.env.HUBSPOT_DISTRIBUTOR_US_STATES_PROPERTY || 'distributor_us_states_count',
   HUBSPOT_DISTRIBUTOR_CAN_PROVINCES_PROPERTY: process.env.HUBSPOT_DISTRIBUTOR_CAN_PROVINCES_PROPERTY || 'distributor_canadian_provinces_count',
   HUBSPOT_DISTRIBUTOR_NON_NA_TERRITORIES_PROPERTY: process.env.HUBSPOT_DISTRIBUTOR_NON_NA_TERRITORIES_PROPERTY || 'distributor_non_na_territories_count',
+
+  // HubSpot Distributor Membership Properties (Company Membership Object)
+  HUBSPOT_DISTRIBUTOR_US_STATES_CHECKBOX_PROPERTY: process.env.HUBSPOT_DISTRIBUTOR_US_STATES_CHECKBOX_PROPERTY || 'distributor_us_states',
+  HUBSPOT_DISTRIBUTOR_CAN_PROVINCES_CHECKBOX_PROPERTY: process.env.HUBSPOT_DISTRIBUTOR_CAN_PROVINCES_CHECKBOX_PROPERTY || 'distributor_canadian_provinces',
+  HUBSPOT_DISTRIBUTOR_NON_NA_TERRITORIES_CHECKBOX_PROPERTY: process.env.HUBSPOT_DISTRIBUTOR_NON_NA_TERRITORIES_CHECKBOX_PROPERTY || 'distributor_non_na_territories',
 
   // HubSpot Manufacturer Membership Properties
   HUBSPOT_MANUFACTURER_MEMBERSHIP_LEVEL_PROPERTY: process.env.HUBSPOT_MANUFACTURER_MEMBERSHIP_LEVEL_PROPERTY || 'manufacturer_membership_level', // Property holding values like "$1,500"
@@ -47,6 +52,7 @@ const config = {
 
   // HubSpot Invoice Object and Properties
   HUBSPOT_INVOICE_OBJECT_TYPE_ID: process.env.HUBSPOT_INVOICE_OBJECT_TYPE_ID || 'invoice', // The object type ID for Invoices (e.g., 'p_invoice' or a numeric ID for custom objects)
+  HUBSPOT_LINE_ITEMS_OBJECT_TYPE_ID: process.env.HUBSPOT_LINE_ITEMS_OBJECT_TYPE_ID || 'line_items', // The object type ID for Line Items
   HUBSPOT_INVOICE_AMOUNT_PROPERTY: process.env.HUBSPOT_INVOICE_AMOUNT_PROPERTY || 'hs_invoice_amount',
   HUBSPOT_INVOICE_DUE_DATE_PROPERTY: process.env.HUBSPOT_INVOICE_DUE_DATE_PROPERTY || 'hs_due_date',
   HUBSPOT_INVOICE_BILLING_CONTACT_ID_PROPERTY: process.env.HUBSPOT_INVOICE_BILLING_CONTACT_ID_PROPERTY || 'hs_billing_contact_id',
@@ -56,8 +62,10 @@ const config = {
   HUBSPOT_INVOICE_LINE_ITEMS_PROPERTY: process.env.HUBSPOT_INVOICE_LINE_ITEMS_PROPERTY || 'hs_line_items', // Property where line items are stored (might be complex)
 
   // HubSpot Association Type IDs (Numeric)
-  HUBSPOT_ASSOCIATION_TYPE_ID_INVOICE_TO_COMPANY: process.env.HUBSPOT_ASSOCIATION_TYPE_ID_INVOICE_TO_COMPANY, // e.g., '280'
-  HUBSPOT_ASSOCIATION_TYPE_ID_INVOICE_TO_CONTACT: process.env.HUBSPOT_ASSOCIATION_TYPE_ID_INVOICE_TO_CONTACT, // e.g., '279'
+  HUBSPOT_ASSOCIATION_TYPE_ID_INVOICE_TO_COMPANY: process.env.HUBSPOT_ASSOCIATION_TYPE_ID_INVOICE_TO_COMPANY, // e.g., '179'
+  HUBSPOT_ASSOCIATION_TYPE_ID_INVOICE_TO_CONTACT: process.env.HUBSPOT_ASSOCIATION_TYPE_ID_INVOICE_TO_CONTACT, // e.g., '177'
+  HUBSPOT_ASSOCIATION_TYPE_ID_CONTACT_TO_INVOICE: process.env.HUBSPOT_ASSOCIATION_TYPE_ID_CONTACT_TO_INVOICE, // e.g., '177' (same as above, but for reverse lookup)
+  HUBSPOT_ASSOCIATION_TYPE_ID_INVOICE_TO_LINE_ITEM: process.env.HUBSPOT_ASSOCIATION_TYPE_ID_INVOICE_TO_LINE_ITEM || 3, // Default line item association type
 
   // Membership Types (Values stored in HUBSPOT_MEMBERSHIP_TYPE_PROPERTY)
   MEMBERSHIP_TYPE_DISTRIBUTOR: process.env.MEMBERSHIP_TYPE_DISTRIBUTOR || 'Distributor',
@@ -69,6 +77,7 @@ const config = {
   DISTRIBUTOR_BASE_FEE: parseFloat(process.env.DISTRIBUTOR_BASE_FEE) || 929,
   DISTRIBUTOR_PER_TERRITORY_FEE: parseFloat(process.env.DISTRIBUTOR_PER_TERRITORY_FEE) || 70,
   // Manufacturer Pricing Tiers are now derived directly from HUBSPOT_MANUFACTURER_MEMBERSHIP_LEVEL_PROPERTY
+  MANUFACTURER_DEFAULT_FEE: parseFloat(process.env.MANUFACTURER_DEFAULT_FEE) || 1500, // Default when property is missing
   // Service Provider Pricing
   SERVICE_PROVIDER_FLAT_FEE: parseFloat(process.env.SERVICE_PROVIDER_FLAT_FEE) || 1250,
 
@@ -77,15 +86,15 @@ const config = {
   INVOICE_DUE_DAYS: parseInt(process.env.INVOICE_DUE_DAYS, 10) || 30,
 
   // S3 Reporting Configuration
-  S3_REPORTS_BUCKET_NAME: process.env.S3_REPORTS_BUCKET_NAME,
+  S3_REPORTS_BUCKET_NAME: process.env.S3_REPORTS_BUCKET_NAME || process.env.AWS_S3_REPORT_BUCKET_NAME,
   // S3_REPORT_KEY_PREFIX: process.env.S3_REPORT_KEY_PREFIX || 'reports', // Prefix is handled in reporting.js
 
   // SES Email Configuration
   ENABLE_ERROR_NOTIFICATIONS: process.env.ENABLE_ERROR_NOTIFICATIONS || 'true', // 'true' or 'false'
-  SES_SENDER_EMAIL: process.env.SES_SENDER_EMAIL,
-  SES_ERROR_RECIPIENT_EMAIL: process.env.SES_ERROR_RECIPIENT_EMAIL,
+  SES_SENDER_EMAIL: process.env.SES_SENDER_EMAIL || process.env.AWS_SES_ERROR_FROM_EMAIL || process.env.AWS_SES_REPORT_FROM_EMAIL,
+  SES_ERROR_RECIPIENT_EMAIL: process.env.SES_ERROR_RECIPIENT_EMAIL || process.env.AWS_SES_ERROR_TO_EMAIL,
   ENABLE_REPORT_EMAIL: process.env.ENABLE_REPORT_EMAIL || 'true', // 'true' or 'false'
-  SES_REPORT_RECIPIENT_EMAIL: process.env.SES_REPORT_RECIPIENT_EMAIL,
+  SES_REPORT_RECIPIENT_EMAIL: process.env.SES_REPORT_RECIPIENT_EMAIL || process.env.AWS_SES_REPORT_TO_EMAIL,
 };
 
 // Basic validation for critical configurations

@@ -14,6 +14,127 @@ function calculateDueDate() {
 }
 
 /**
+ * Validates that required configuration values are present.
+ * @throws {Error} If required configuration is missing.
+ */
+function validateInvoiceConfig() {
+  const requiredConfigs = [
+    'HUBSPOT_INVOICE_OBJECT_TYPE_ID',
+    'HUBSPOT_ASSOCIATION_TYPE_ID_INVOICE_TO_CONTACT',
+    'HUBSPOT_ASSOCIATION_TYPE_ID_INVOICE_TO_COMPANY',
+    'HUBSPOT_ASSOCIATION_TYPE_ID_INVOICE_TO_LINE_ITEM'
+  ];
+
+  const missingConfigs = requiredConfigs.filter(key => !config[key]);
+  
+  if (missingConfigs.length > 0) {
+    throw new Error(`Missing required configuration: ${missingConfigs.join(', ')}`);
+  }
+}
+
+/**
+ * Gets the object type name for V4 associations API.
+ * @param {string} objectTypeId - The object type ID from config.
+ * @returns {string} The object type name for V4 API.
+ */
+function getObjectTypeName(objectTypeId) {
+  // Map object type IDs to their V4 API names
+  const objectTypeMap = {
+    'invoice': 'invoice',
+    'p_invoice': 'invoice',
+    'contacts': 'contact',
+    'companies': 'company',
+    'line_items': 'line_item',
+    'p_line_item': 'line_item'
+  };
+
+  // If it's already a known name, return it
+  if (objectTypeMap[objectTypeId]) {
+    return objectTypeMap[objectTypeId];
+  }
+
+  // For numeric IDs, we need to use the object type name
+  // Default mappings based on common HubSpot object types
+  if (objectTypeId === config.HUBSPOT_INVOICE_OBJECT_TYPE_ID) {
+    return 'invoice';
+  }
+  if (objectTypeId === config.HUBSPOT_LINE_ITEMS_OBJECT_TYPE_ID) {
+    return 'line_item';
+  }
+
+  // Fallback to the original value if we can't determine
+  return objectTypeId;
+}
+
+/**
+ * Creates an association between two objects using HubSpot V4 API.
+ * @param {hubspot.Client} hubspotClient - The HubSpot client.
+ * @param {string} fromObjectType - Source object type.
+ * @param {string} fromObjectId - Source object ID.
+ * @param {string} toObjectType - Target object type.
+ * @param {string} toObjectId - Target object ID.
+ * @param {number} associationTypeId - Association type ID.
+ */
+async function createAssociation(hubspotClient, fromObjectType, fromObjectId, toObjectType, toObjectId, associationTypeId) {
+  if (!fromObjectId || !toObjectId || !associationTypeId) {
+    logger.warn(`Skipping association creation - missing required parameters: fromObjectId=${fromObjectId}, toObjectId=${toObjectId}, associationTypeId=${associationTypeId}`);
+    logger.warn(`To fix this, set the required environment variables: HUBSPOT_ASSOCIATION_TYPE_ID_INVOICE_TO_CONTACT and HUBSPOT_ASSOCIATION_TYPE_ID_INVOICE_TO_COMPANY`);
+    return;
+  }
+
+  const fromTypeName = getObjectTypeName(fromObjectType);
+  const toTypeName = getObjectTypeName(toObjectType);
+
+  logger.info(`Creating association: ${fromTypeName}:${fromObjectId} -> ${toTypeName}:${toObjectId} (type: ${associationTypeId})`);
+
+  try {
+    // The V4 API expects an array of associations
+    const associations = [{
+      associationCategory: 'HUBSPOT_DEFINED',
+      associationTypeId: parseInt(associationTypeId, 10)
+    }];
+
+    // DEBUG LOGGING: Print all relevant values before making the API call
+    logger.info('DEBUG: About to create association', {
+      fromTypeName,
+      fromObjectId,
+      toTypeName,
+      toObjectId,
+      associationTypeId,
+      associations,
+      typeof_associationTypeId: typeof associationTypeId,
+      isNaN: isNaN(parseInt(associationTypeId, 10)),
+      env: {
+        HUBSPOT_ASSOCIATION_TYPE_ID_INVOICE_TO_CONTACT: process.env.HUBSPOT_ASSOCIATION_TYPE_ID_INVOICE_TO_CONTACT,
+        HUBSPOT_ASSOCIATION_TYPE_ID_INVOICE_TO_COMPANY: process.env.HUBSPOT_ASSOCIATION_TYPE_ID_INVOICE_TO_COMPANY,
+        HUBSPOT_ASSOCIATION_TYPE_ID_INVOICE_TO_LINE_ITEM: process.env.HUBSPOT_ASSOCIATION_TYPE_ID_INVOICE_TO_LINE_ITEM,
+      }
+    });
+
+    await hubspotClient.crm.associations.v4.basicApi.create(
+      fromTypeName,
+      fromObjectId.toString(),
+      toTypeName,
+      toObjectId.toString(),
+      associations
+    );
+    logger.info(`Successfully created association between ${fromTypeName}:${fromObjectId} and ${toTypeName}:${toObjectId}`);
+  } catch (error) {
+    logger.error(`Failed to create association between ${fromTypeName}:${fromObjectId} and ${toTypeName}:${toObjectId}:`, error.body || error.message);
+    
+    // Provide helpful debugging information
+    if (error.body && error.body.message) {
+      logger.error(`HubSpot API Error Details: ${error.body.message}`);
+    }
+    
+    // Log the exact parameters being sent for debugging
+    logger.error(`Association parameters: fromType=${fromTypeName}, fromId=${fromObjectId}, toType=${toTypeName}, toId=${toObjectId}, typeId=${associationTypeId}`);
+    
+    throw error;
+  }
+}
+
+/**
  * Checks if an open (unpaid and not voided) invoice already exists for a contact or company.
  *
  * @async
@@ -41,12 +162,12 @@ const findExistingOpenInvoice = async (hubspotClient, { companyId, contactId }) 
     const filters = [];
     if (contactId) {
       // Create a filter to find invoices associated with the given contact.
-      // This requires knowing the association type from Contact to Invoice.
+      // Use the correct association search structure for v4 API
       filters.push({
-        associationCategory: "HUBSPOT_DEFINED",
-        associationTypeId: config.HUBSPOT_ASSOCIATION_TYPE_ID_CONTACT_TO_INVOICE, // You must configure this ID
+        propertyName: "hs_object_id",
         operator: "HAS_PROPERTY",
-        propertyName: "hs_object_id" // Check for existence of an associated contact
+        associationCategory: "HUBSPOT_DEFINED",
+        associationTypeId: config.HUBSPOT_ASSOCIATION_TYPE_ID_CONTACT_TO_INVOICE || 1
       });
     }
 
@@ -81,10 +202,11 @@ const findExistingOpenInvoice = async (hubspotClient, { companyId, contactId }) 
   }
 };
 
-
 /**
- * Creates an invoice record in HubSpot. This function is now generic and works for both
- * company and individual memberships.
+ * Creates an invoice record in HubSpot following the official API workflow.
+ * Step 1: Create draft invoice with minimal properties
+ * Step 2: Add associations (contact, line items, company)
+ * Step 3: Update properties and move to open status
  *
  * @async
  * @param {hubspot.Client} hubspotClient The initialized HubSpot client.
@@ -101,52 +223,161 @@ const createInvoice = async (hubspotClient, invoiceData) => {
 
   logger.info(`Creating HubSpot invoice record for Company ID: ${companyId}, Contact ID: ${contactId}, Amount: ${invoiceAmount}`);
 
-  if (!config.HUBSPOT_INVOICE_OBJECT_TYPE_ID) {
-    throw new Error('Configuration for Invoice Object Type ID is missing.');
+  // Validate configuration before proceeding
+  try {
+    validateInvoiceConfig();
+  } catch (error) {
+    logger.error('Configuration validation failed:', error.message);
+    throw error;
   }
 
   try {
-    const invoiceProperties = {
-      [config.HUBSPOT_INVOICE_AMOUNT_PROPERTY || 'hs_invoice_amount']: invoiceAmount.toString(),
-      [config.HUBSPOT_INVOICE_DUE_DATE_PROPERTY || 'hs_due_date']: calculateDueDate(),
-      [config.HUBSPOT_INVOICE_BILLING_CONTACT_ID_PROPERTY || 'hs_billing_contact_id']: contactId,
-      [config.HUBSPOT_INVOICE_STATUS_PROPERTY || 'hs_status']: config.HUBSPOT_INVOICE_DEFAULT_STATUS || 'DRAFT',
-      [config.HUBSPOT_INVOICE_LINE_ITEMS_PROPERTY || 'hs_line_items']: JSON.stringify(lineItems),
-      // NEW: Add the link to the printable PDF generated by our Lambda
-      [config.HUBSPOT_INVOICE_PDF_LINK_PROPERTY]: pdfLink,
+    // STEP 1: Create draft invoice with minimal properties
+    const draftInvoiceProperties = {
+      'hs_currency': config.INVOICE_CURRENCY || 'USD',
+      // Add PDF link if we have one
+      ...(pdfLink && { [config.HUBSPOT_INVOICE_PDF_LINK_PROPERTY]: pdfLink })
     };
-
-    const associations = [];
-    if (companyId && config.HUBSPOT_ASSOCIATION_TYPE_ID_INVOICE_TO_COMPANY) {
-      associations.push({
-        to: { id: companyId },
-        types: [{
-          associationCategory: 'HUBSPOT_DEFINED',
-          associationTypeId: parseInt(config.HUBSPOT_ASSOCIATION_TYPE_ID_INVOICE_TO_COMPANY, 10)
-        }]
-      });
-    }
-    if (contactId && config.HUBSPOT_ASSOCIATION_TYPE_ID_INVOICE_TO_CONTACT) {
-      associations.push({
-        to: { id: contactId },
-        types: [{
-          associationCategory: 'HUBSPOT_DEFINED',
-          associationTypeId: parseInt(config.HUBSPOT_ASSOCIATION_TYPE_ID_INVOICE_TO_CONTACT, 10)
-        }]
-      });
-    }
 
     const createInvoiceRequest = {
-      properties: invoiceProperties,
-      associations: associations,
+      properties: draftInvoiceProperties
     };
 
-    logger.info('Sending create invoice request to HubSpot:', { request: createInvoiceRequest });
+    logger.info('Step 1: Creating draft invoice with properties:', draftInvoiceProperties);
     const createdInvoiceResponse = await hubspotClient.crm.objects.basicApi.create(
       config.HUBSPOT_INVOICE_OBJECT_TYPE_ID,
       createInvoiceRequest
     );
-    logger.info(`Invoice record created successfully. Invoice ID: ${createdInvoiceResponse.id}`);
+
+    const invoiceId = createdInvoiceResponse.id;
+    logger.info(`Draft invoice created successfully. Invoice ID: ${invoiceId}`);
+
+    // STEP 2: Add associations using v4 API
+    logger.info('Step 2: Adding associations...');
+
+    // Add contact association (required)
+    if (contactId) {
+      await createAssociation(
+        hubspotClient,
+        config.HUBSPOT_INVOICE_OBJECT_TYPE_ID,
+        invoiceId,
+        'contacts',
+        contactId,
+        config.HUBSPOT_ASSOCIATION_TYPE_ID_INVOICE_TO_CONTACT
+      );
+    }
+
+    // Add company association (optional)
+    if (companyId) {
+      await createAssociation(
+        hubspotClient,
+        config.HUBSPOT_INVOICE_OBJECT_TYPE_ID,
+        invoiceId,
+        'companies',
+        companyId,
+        config.HUBSPOT_ASSOCIATION_TYPE_ID_INVOICE_TO_COMPANY
+      );
+    }
+
+    // Add line items associations
+    for (const lineItem of lineItems) {
+      if (lineItem.productId) {
+        // Create a line item from the product first
+        try {
+          const lineItemData = {
+            properties: {
+              hs_product_id: lineItem.productId.toString(),
+              quantity: lineItem.quantity.toString(),
+              price: lineItem.price.toString(),
+              name: lineItem.name || '',
+              description: lineItem.description || '',
+              billing_frequency: 'One-Time'
+            }
+          };
+
+          logger.info(`Creating line item from product ${lineItem.productId}...`);
+          const createdLineItem = await hubspotClient.crm.lineItems.basicApi.create(lineItemData);
+          const lineItemId = createdLineItem.id;
+          logger.info(`Line item ${lineItemId} created successfully from product ${lineItem.productId}`);
+
+          // Now associate the line item with the invoice
+          await createAssociation(
+            hubspotClient,
+            config.HUBSPOT_INVOICE_OBJECT_TYPE_ID,
+            invoiceId,
+            'line_items',
+            lineItemId,
+            config.HUBSPOT_ASSOCIATION_TYPE_ID_INVOICE_TO_LINE_ITEM
+          );
+          logger.info(`Successfully associated line item ${lineItemId} with invoice ${invoiceId}`);
+        } catch (error) {
+          // If the product doesn't exist, log a warning but don't fail the invoice creation
+          if (error.body && error.body.message && error.body.message.includes('not found')) {
+            logger.warn(`Product ${lineItem.productId} does not exist in HubSpot. Skipping line item creation. Error: ${error.body.message}`);
+            logger.warn(`Consider creating the product in HubSpot or using a different product ID.`);
+          } else {
+            // For other errors, re-throw to maintain existing behavior
+            logger.error(`Error creating line item from product ${lineItem.productId}:`, error.body || error.message);
+            throw error;
+          }
+        }
+      } else {
+        // Create custom line item for state addons (Distributor territories)
+        const customLineItemData = {
+          properties: {
+            name: lineItem.name,
+            quantity: lineItem.quantity.toString(),
+            price: lineItem.price.toString(),
+            hs_product_id: null, // Custom line item, no product ID
+            description: lineItem.description || '',
+            billing_frequency: 'One-Time'
+          }
+        };
+
+        const customLineItem = await hubspotClient.crm.lineItems.basicApi.create(customLineItemData);
+
+        // Associate the custom line item
+        await createAssociation(
+          hubspotClient,
+          config.HUBSPOT_INVOICE_OBJECT_TYPE_ID,
+          invoiceId,
+          'line_items',
+          customLineItem.id,
+          config.HUBSPOT_ASSOCIATION_TYPE_ID_INVOICE_TO_LINE_ITEM
+        );
+        logger.info(`Custom line item ${customLineItem.id} created and associated with invoice ${invoiceId}`);
+      }
+    }
+
+    // STEP 3: Update invoice properties and move to open status
+    logger.info('Step 3: Updating invoice properties and setting status to open...');
+    
+    // Validate that we have the required associations for setting status to "open"
+    // HubSpot requires: one contact and at least one line item must be associated
+    if (!contactId) {
+      throw new Error('Cannot set invoice status to "open" - contact association is required');
+    }
+    
+    if (!lineItems || lineItems.length === 0) {
+      throw new Error('Cannot set invoice status to "open" - at least one line item association is required');
+    }
+    
+    const updateProperties = {
+      'hs_due_date': calculateDueDate(),
+      'hs_invoice_status': 'open', // Set status to open as per HubSpot API guidance
+      // Add any other properties that need to be set after associations
+    };
+
+    await hubspotClient.crm.objects.basicApi.update(
+      config.HUBSPOT_INVOICE_OBJECT_TYPE_ID,
+      invoiceId,
+      { properties: updateProperties }
+    );
+
+    logger.info(`Invoice ${invoiceId} updated with properties:`, updateProperties);
+    logger.info(`Invoice status set to "open" - invoice is now payable and can be shared`);
+    logger.info(`Invoice record created successfully. Invoice ID: ${invoiceId}`);
+    
     return createdInvoiceResponse;
 
   } catch (error) {
@@ -178,4 +409,43 @@ const updateCompanyMembershipDues = async (hubspotClient, companyId, amount) => 
     }
 };
 
-module.exports = { createInvoice, findExistingOpenInvoice, updateCompanyMembershipDues };
+/**
+ * Fetches the HubSpot invoice payment link after the invoice has been created.
+ * 
+ * @async
+ * @param {hubspot.Client} hubspotClient - The initialized HubSpot client.
+ * @param {string} invoiceId - The ID of the created invoice.
+ * @returns {Promise<string|null>} A promise that resolves to the invoice payment link or null if not found.
+ */
+const getInvoicePaymentLink = async (hubspotClient, invoiceId) => {
+  if (!invoiceId) {
+    logger.warn('getInvoicePaymentLink called without invoiceId');
+    return null;
+  }
+
+  logger.info(`Fetching payment link for invoice ID: ${invoiceId}`);
+  
+  try {
+    const invoiceResponse = await hubspotClient.crm.objects.basicApi.getById(
+      config.HUBSPOT_INVOICE_OBJECT_TYPE_ID,
+      invoiceId,
+      ['hs_invoice_link']
+    );
+    
+    const paymentLink = invoiceResponse.properties.hs_invoice_link;
+    
+    if (paymentLink) {
+      logger.info(`Retrieved payment link for invoice ${invoiceId}: ${paymentLink}`);
+      return paymentLink;
+    } else {
+      logger.warn(`No payment link found for invoice ${invoiceId}`);
+      return null;
+    }
+    
+  } catch (error) {
+    logger.error(`Error fetching payment link for invoice ${invoiceId}:`, error.body || error.message);
+    return null;
+  }
+};
+
+module.exports = { createInvoice, findExistingOpenInvoice, updateCompanyMembershipDues, getInvoicePaymentLink };

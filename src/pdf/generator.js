@@ -2,6 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer-core'); // We must use puppeteer-core
+const QRCode = require('qrcode');
 const logger = require('../utils/logger');
 
 /**
@@ -67,8 +68,46 @@ const generatePdf = async (htmlContent) => {
     }
 };
 
+/**
+ * Generates a QR code as a base64 data URL from a given URL.
+ * @param {string} url - The URL to encode in the QR code.
+ * @param {object} [options] - QR code generation options.
+ * @returns {Promise<string>} A promise that resolves to the base64 data URL of the QR code.
+ */
+const generateQRCode = async (url, options = {}) => {
+    if (!url) {
+        logger.warn('generateQRCode called without URL');
+        return null;
+    }
+
+    try {
+        const qrOptions = {
+            type: 'image/png',
+            quality: 0.92,
+            margin: 1,
+            color: {
+                dark: '#000000',
+                light: '#FFFFFF'
+            },
+            width: 200,
+            ...options
+        };
+
+        logger.info(`Generating QR code for URL: ${url}`);
+        const qrCodeDataUrl = await QRCode.toDataURL(url, qrOptions);
+        
+        logger.info('QR code generated successfully');
+        return qrCodeDataUrl;
+        
+    } catch (error) {
+        logger.error('Error generating QR code:', error);
+        return null;
+    }
+};
+
 module.exports = {
     loadTemplate,
     populateTemplate,
-    generatePdf
+    generatePdf,
+    generateQRCode
 };

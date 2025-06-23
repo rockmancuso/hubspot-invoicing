@@ -25,7 +25,8 @@ const calculateServiceProviderPrice = (companyProperties) => {
       quantity: 1,
       price: flatRate,
       description: `Annual flat rate fee for Service Provider Membership.`,
-      // hs_product_id: config.HUBSPOT_PRODUCT_ID_SERVICE_PROVIDER, // If configured
+      productId: '2853281631', // $1,250 service provider product ID
+      billing_frequency: 'One-Time'
     },
   ];
 

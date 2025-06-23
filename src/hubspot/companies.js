@@ -31,6 +31,9 @@ const getExpiringCompanyMemberships = async (hubspotClient) => {
     'company_name',
     'status',
     nextRenewalDateProperty,          // ← variable, not a string literal
+    config.HUBSPOT_DISTRIBUTOR_US_STATES_CHECKBOX_PROPERTY,
+    config.HUBSPOT_DISTRIBUTOR_CAN_PROVINCES_CHECKBOX_PROPERTY,
+    config.HUBSPOT_DISTRIBUTOR_NON_NA_TERRITORIES_CHECKBOX_PROPERTY,
   ].filter(Boolean);
 
   const CUSTOM_OBJECT_TYPE_ID = '2-45511388';
@@ -100,10 +103,17 @@ const getExpiringCompanyMemberships = async (hubspotClient) => {
           'zip',
           config.HUBSPOT_MEMBERSHIP_TYPE_PROPERTY,
           'annual_sales_volume',
-          config.HUBSPOT_DISTRIBUTOR_US_STATES_CHECKBOX_PROPERTY,
-          config.HUBSPOT_DISTRIBUTOR_CAN_PROVINCES_CHECKBOX_PROPERTY,
-          config.HUBSPOT_DISTRIBUTOR_NON_NA_TERRITORIES_CHECKBOX_PROPERTY,
         ].filter(Boolean));
+
+        // DEBUG: Log the raw company data retrieved from HubSpot
+        logger.info(`Raw company data for ${companyId}:`, {
+          name: company.properties.name,
+          address: company.properties.address,
+          city: company.properties.city,
+          state: company.properties.state,
+          zip: company.properties.zip,
+          membershipType: company.properties[config.HUBSPOT_MEMBERSHIP_TYPE_PROPERTY]
+        });
 
         enriched.push({
           id: membership.id,
@@ -114,10 +124,21 @@ const getExpiringCompanyMemberships = async (hubspotClient) => {
             status:                         membership.properties.status,
             [nextRenewalDateProperty]:      membership.properties[nextRenewalDateProperty],
             name:                           company.properties.name,
+            address:                        company.properties.address,
+            city:                           company.properties.city,
+            state:                          company.properties.state,
+            zip:                            company.properties.zip,
             [config.HUBSPOT_MEMBERSHIP_TYPE_PROPERTY]:
                                             company.properties[config.HUBSPOT_MEMBERSHIP_TYPE_PROPERTY],
             number_of_territories:          company.properties.number_of_territories,
             annual_sales_volume:            company.properties.annual_sales_volume,
+            // Distributor territory properties now come from membership object
+            [config.HUBSPOT_DISTRIBUTOR_US_STATES_CHECKBOX_PROPERTY]:
+                                            membership.properties[config.HUBSPOT_DISTRIBUTOR_US_STATES_CHECKBOX_PROPERTY],
+            [config.HUBSPOT_DISTRIBUTOR_CAN_PROVINCES_CHECKBOX_PROPERTY]:
+                                            membership.properties[config.HUBSPOT_DISTRIBUTOR_CAN_PROVINCES_CHECKBOX_PROPERTY],
+            [config.HUBSPOT_DISTRIBUTOR_NON_NA_TERRITORIES_CHECKBOX_PROPERTY]:
+                                            membership.properties[config.HUBSPOT_DISTRIBUTOR_NON_NA_TERRITORIES_CHECKBOX_PROPERTY],
           },
         });
 
