@@ -1,6 +1,7 @@
 // Error Handling Utilities
-const AWS = require('aws-sdk');
-const logger =require('./logger');
+const formData = require('form-data');
+const Mailgun = require('mailgun.js');
+const logger = require('./logger');
 const config = require('../config');
 
 /**
@@ -21,7 +22,7 @@ const logError = (errorObject, contextMessage, additionalInfo = {}) => {
 };
 
 /**
- * Sends an error notification via Amazon SES.
+ * Sends an error notification via Mailgun.
  *
  * @async
  * @param {Error} errorObject - The error object.
@@ -31,16 +32,18 @@ const logError = (errorObject, contextMessage, additionalInfo = {}) => {
  */
 const sendErrorNotification = async (errorObject, lambdaEvent = {}, lambdaContext = {}) => {
   if (config.ENABLE_ERROR_NOTIFICATIONS !== 'true') {
-    logger.info('Error notifications are disabled. Skipping SES email.');
+    logger.info('Error notifications are disabled. Skipping Mailgun email.');
     return;
   }
 
-  if (!config.SES_ERROR_RECIPIENT_EMAIL || !config.SES_SENDER_EMAIL) {
-    logger.error('SES recipient or sender email not configured. Cannot send error notification.');
+  if (!config.MAILGUN_API_KEY || !config.MAILGUN_DOMAIN || !config.MAILGUN_ERROR_RECIPIENT_EMAIL) {
+    logger.error('Mailgun configuration incomplete. Cannot send error notification.');
     return;
   }
 
-  const ses = new AWS.SES({ region: config.AWS_REGION || 'us-east-1' });
+  const mailgun = new Mailgun(formData);
+  const mg = mailgun.client({ username: 'api', key: config.MAILGUN_API_KEY });
+
   const subject = `Error in HubSpot Invoicing Lambda: ${lambdaContext.functionName || 'N/A'}`;
 
   let bodyText = `An error occurred in the HubSpot Invoicing Lambda function.\n\n`;
@@ -51,36 +54,21 @@ const sendErrorNotification = async (errorObject, lambdaEvent = {}, lambdaContex
   bodyText += `Error Stack:\n${errorObject.stack}\n\n`;
   bodyText += `Event Details:\n${JSON.stringify(lambdaEvent, null, 2)}\n`;
 
-  const params = {
-    Destination: {
-      ToAddresses: [config.SES_ERROR_RECIPIENT_EMAIL],
-    },
-    Message: {
-      Body: {
-        Text: {
-          Data: bodyText,
-          Charset: 'UTF-8',
-        },
-      },
-      Subject: {
-        Data: subject,
-        Charset: 'UTF-8',
-      },
-    },
-    Source: config.SES_SENDER_EMAIL,
+  const messageData = {
+    from: config.MAILGUN_SENDER_EMAIL,
+    to: [config.MAILGUN_ERROR_RECIPIENT_EMAIL],
+    subject: subject,
+    text: bodyText
   };
 
   try {
-    logger.info(`Sending error notification to ${config.SES_ERROR_RECIPIENT_EMAIL}`);
-    await ses.sendEmail(params).promise();
+    logger.info(`Sending error notification to ${config.MAILGUN_ERROR_RECIPIENT_EMAIL}`);
+    await mg.messages.create(config.MAILGUN_DOMAIN, messageData);
     logger.info('Error notification email sent successfully.');
   } catch (emailError) {
-    logger.error('Failed to send error notification email via SES:', emailError);
+    logger.error('Failed to send error notification email via Mailgun:', emailError);
     // Log this failure, but don't let it crash the main error handling flow
   }
 };
 
-module.exports = {
-  logError,
-  sendErrorNotification,
-};
+module.exports = { logError, sendErrorNotification };

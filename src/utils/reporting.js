@@ -1,10 +1,11 @@
 // Reporting Utilities
 const AWS = require('aws-sdk');
+const formData = require('form-data');
+const Mailgun = require('mailgun.js');
 const logger = require('./logger');
 const config = require('../config');
 
 const s3 = new AWS.S3({ region: config.AWS_REGION || 'us-east-1' });
-const ses = new AWS.SES({ region: config.AWS_REGION || 'us-east-1' });
 
 /**
  * Converts an array of objects to a CSV string.
@@ -30,41 +31,69 @@ function arrayToCsv(dataArray) {
 }
 
 /**
- * Generates a summary report content based on the provided data.
- *
- * @param {object} reportData - Data for the report.
- * @param {string} reportData.date - ISO date string for the report.
- * @param {number} reportData.totalCompaniesProcessed - Total companies processed.
- * @param {number} reportData.successfulInvoices - Count of successful invoices.
- * @param {number} reportData.failedInvoices - Count of failed invoices.
- * @param {Array<object>} reportData.invoices - Details of successful invoices.
- * @param {Array<object>} reportData.failures - Details of failed attempts.
- * @returns {string} The report content (CSV format).
+ * Generates the content for a report based on the provided data.
+ * @param {object} reportData - The data to include in the report.
+ * @returns {string} The generated report content as a CSV string.
  */
 const generateReportContent = (reportData) => {
-  logger.info('Generating monthly invoice report content...');
-  let reportContent = `Monthly Invoice Generation Report\n`;
-  reportContent += `Date: ${reportData.date}\n`;
-  reportContent += `Total Companies Processed: ${reportData.totalCompaniesProcessed}\n`;
-  reportContent += `Total Successful Invoices: ${reportData.successfulInvoices}\n`;
-  reportContent += `Total Failed Attempts: ${reportData.failedInvoices}\n\n`;
+  const reportRows = [];
 
-  reportContent += 'Successful Invoices:\n';
+  // Add summary row
+  reportRows.push({
+    'Report Date': new Date(reportData.date).toLocaleDateString(),
+    'Total Memberships Processed': reportData.totalMembershipsProcessed,
+    'Successful Invoices': reportData.successfulInvoices,
+    'Failed Invoices': reportData.failedInvoices,
+    'Success Rate': reportData.totalMembershipsProcessed > 0 
+      ? `${((reportData.successfulInvoices / reportData.totalMembershipsProcessed) * 100).toFixed(1)}%`
+      : '0%'
+  });
+
+  // Add individual invoice details
   if (reportData.invoices && reportData.invoices.length > 0) {
-    reportContent += arrayToCsv(reportData.invoices) + '\n';
-  } else {
-    reportContent += 'No invoices were successfully generated.\n';
+    reportRows.push({}); // Empty row for spacing
+    reportRows.push({
+      'Invoice Details': '=== SUCCESSFUL INVOICES ===',
+      '': '',
+      '': '',
+      '': '',
+      '': ''
+    });
+
+    reportData.invoices.forEach(invoice => {
+      reportRows.push({
+        'Name': invoice.name,
+        'ID': invoice.id,
+        'Type': invoice.type,
+        'Invoice ID': invoice.invoiceId,
+        'Amount': invoice.invoiceAmount,
+        'PDF Link': invoice.pdfLink,
+        'Payment Link': invoice.paymentLink
+      });
+    });
   }
 
-  reportContent += '\nFailed Attempts:\n';
+  // Add failure details
   if (reportData.failures && reportData.failures.length > 0) {
-    reportContent += arrayToCsv(reportData.failures) + '\n';
-  } else {
-    reportContent += 'No failed attempts recorded.\n';
+    reportRows.push({}); // Empty row for spacing
+    reportRows.push({
+      'Failure Details': '=== FAILED INVOICES ===',
+      '': '',
+      '': '',
+      '': '',
+      '': ''
+    });
+
+    reportData.failures.forEach(failure => {
+      reportRows.push({
+        'Name': failure.name,
+        'ID': failure.id,
+        'Reason': failure.reason
+      });
+    });
   }
 
-  logger.info('Monthly report content generated.');
-  return reportContent;
+  return arrayToCsv(reportRows);
 };
 
 /**
@@ -109,26 +138,26 @@ const generateAndStoreReport = async (reportData) => {
 };
 
 /**
- * Emails the report using Amazon SES, attaching the report from S3 or including content.
+ * Emails the report using Mailgun, attaching the report from S3 or including content.
  *
  * @param {string} reportS3Url - The S3 URL of the report.
  * @param {object} reportData - The raw report data for email body summary.
  * @returns {Promise<void>}
- * @throws {Error} If SES configuration is missing or email sending fails.
+ * @throws {Error} If Mailgun configuration is missing or email sending fails.
  */
 const sendReportEmail = async (reportS3Url, reportData) => {
   if (config.ENABLE_REPORT_EMAIL !== 'true') {
-    logger.info('Report emails are disabled. Skipping SES email for report.');
+    logger.info('Report emails are disabled. Skipping Mailgun email for report.');
     return;
   }
 
-  const toAddress = config.SES_REPORT_RECIPIENT_EMAIL;
-  const fromAddress = config.SES_SENDER_EMAIL;
-
-  if (!toAddress || !fromAddress) {
-    logger.error('SES recipient or sender email for reports not configured. Cannot send report email.');
-    throw new Error('SES email configuration for reports is missing.');
+  if (!config.MAILGUN_API_KEY || !config.MAILGUN_DOMAIN || !config.MAILGUN_REPORT_RECIPIENT_EMAIL) {
+    logger.error('Mailgun configuration incomplete. Cannot send report email.');
+    throw new Error('Mailgun email configuration for reports is missing.');
   }
+
+  const mailgun = new Mailgun(formData);
+  const mg = mailgun.client({ username: 'api', key: config.MAILGUN_API_KEY });
 
   const subject = `HubSpot Invoicing Monthly Report - ${new Date(reportData.date).toLocaleDateString()}`;
   let bodyText = `HubSpot Invoicing Monthly Report\n\n`;
@@ -147,23 +176,19 @@ const sendReportEmail = async (reportS3Url, reportData) => {
     bodyText += `No invoices were successfully generated.\n`;
   }
 
-  const params = {
-    Source: fromAddress,
-    Destination: { ToAddresses: [toAddress] },
-    Message: {
-      Subject: { Data: subject, Charset: 'UTF-8' },
-      Body: {
-        Text: { Data: bodyText, Charset: 'UTF-8' },
-      },
-    },
+  const messageData = {
+    from: config.MAILGUN_SENDER_EMAIL,
+    to: [config.MAILGUN_REPORT_RECIPIENT_EMAIL],
+    subject: subject,
+    text: bodyText
   };
 
   try {
-    logger.info(`Sending report email to: ${toAddress}`);
-    await ses.sendEmail(params).promise();
+    logger.info(`Sending report email to: ${config.MAILGUN_REPORT_RECIPIENT_EMAIL}`);
+    await mg.messages.create(config.MAILGUN_DOMAIN, messageData);
     logger.info('Report email sent successfully.');
   } catch (error) {
-    logger.error('Failed to send report email via SES:', error);
+    logger.error('Failed to send report email via Mailgun:', error);
     throw error; // Re-throw to be handled by the main lambda handler
   }
 };

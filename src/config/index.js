@@ -32,7 +32,7 @@ const config = {
 
   // HubSpot Contact Properties & Associations
   HUBSPOT_PRIMARY_CONTACT_ASSOCIATION_TYPE_ID: process.env.HUBSPOT_PRIMARY_CONTACT_ASSOCIATION_TYPE_ID, // e.g., '2' (numeric ID for 'company_to_contact' if it's primary)
-  HUBSPOT_CONTACT_PROPERTIES_TO_FETCH: process.env.HUBSPOT_CONTACT_PROPERTIES_TO_FETCH || 'email,firstname,lastname',
+  HUBSPOT_CONTACT_PROPERTIES_TO_FETCH: process.env.HUBSPOT_CONTACT_PROPERTIES_TO_FETCH || 'email,firstname,lastname,address,city,state,zip',
 
   // BEGIN NEW CONFIGS
   
@@ -75,7 +75,7 @@ const config = {
   // Pricing Configuration (Referenced by pricing modules)
   // Distributor Pricing
   DISTRIBUTOR_BASE_FEE: parseFloat(process.env.DISTRIBUTOR_BASE_FEE) || 929,
-  DISTRIBUTOR_PER_TERRITORY_FEE: parseFloat(process.env.DISTRIBUTOR_PER_TERRITORY_FEE) || 70,
+  DISTRIBUTOR_TERRITORY_FEE: parseFloat(process.env.DISTRIBUTOR_TERRITORY_FEE) || 70,
   // Manufacturer Pricing Tiers are now derived directly from HUBSPOT_MANUFACTURER_MEMBERSHIP_LEVEL_PROPERTY
   MANUFACTURER_DEFAULT_FEE: parseFloat(process.env.MANUFACTURER_DEFAULT_FEE) || 1500, // Default when property is missing
   // Service Provider Pricing
@@ -89,12 +89,14 @@ const config = {
   S3_REPORTS_BUCKET_NAME: process.env.S3_REPORTS_BUCKET_NAME || process.env.AWS_S3_REPORT_BUCKET_NAME,
   // S3_REPORT_KEY_PREFIX: process.env.S3_REPORT_KEY_PREFIX || 'reports', // Prefix is handled in reporting.js
 
-  // SES Email Configuration
+  // Mailgun Email Configuration
   ENABLE_ERROR_NOTIFICATIONS: process.env.ENABLE_ERROR_NOTIFICATIONS || 'true', // 'true' or 'false'
-  SES_SENDER_EMAIL: process.env.SES_SENDER_EMAIL || process.env.AWS_SES_ERROR_FROM_EMAIL || process.env.AWS_SES_REPORT_FROM_EMAIL,
-  SES_ERROR_RECIPIENT_EMAIL: process.env.SES_ERROR_RECIPIENT_EMAIL || process.env.AWS_SES_ERROR_TO_EMAIL,
+  MAILGUN_API_KEY: process.env.MAILGUN_API_KEY,
+  MAILGUN_DOMAIN: process.env.MAILGUN_DOMAIN,
+  MAILGUN_SENDER_EMAIL: process.env.MAILGUN_SENDER_EMAIL || 'noreply@yourdomain.com',
+  MAILGUN_ERROR_RECIPIENT_EMAIL: process.env.MAILGUN_ERROR_RECIPIENT_EMAIL,
   ENABLE_REPORT_EMAIL: process.env.ENABLE_REPORT_EMAIL || 'true', // 'true' or 'false'
-  SES_REPORT_RECIPIENT_EMAIL: process.env.SES_REPORT_RECIPIENT_EMAIL || process.env.AWS_SES_REPORT_TO_EMAIL,
+  MAILGUN_REPORT_RECIPIENT_EMAIL: process.env.MAILGUN_REPORT_RECIPIENT_EMAIL,
 };
 
 // Basic validation for critical configurations
@@ -108,11 +110,11 @@ if (config.NODE_ENV !== 'test') {
   if (!config.S3_REPORTS_BUCKET_NAME) {
     (logger || console).warn('Warning: S3_REPORTS_BUCKET_NAME is not set. Storing reports to S3 will fail.');
   }
-  if (config.ENABLE_ERROR_NOTIFICATIONS === 'true' && (!config.SES_SENDER_EMAIL || !config.SES_ERROR_RECIPIENT_EMAIL)) {
-    (logger || console).warn('Warning: Error notifications are enabled, but SES_SENDER_EMAIL or SES_ERROR_RECIPIENT_EMAIL is not set.');
+  if (config.ENABLE_ERROR_NOTIFICATIONS === 'true' && (!config.MAILGUN_API_KEY || !config.MAILGUN_DOMAIN || !config.MAILGUN_ERROR_RECIPIENT_EMAIL)) {
+    (logger || console).warn('Warning: Error notifications are enabled, but Mailgun configuration is incomplete.');
   }
-  if (config.ENABLE_REPORT_EMAIL === 'true' && (!config.SES_SENDER_EMAIL || !config.SES_REPORT_RECIPIENT_EMAIL)) {
-    (logger || console).warn('Warning: Report emails are enabled, but SES_SENDER_EMAIL or SES_REPORT_RECIPIENT_EMAIL is not set.');
+  if (config.ENABLE_REPORT_EMAIL === 'true' && (!config.MAILGUN_API_KEY || !config.MAILGUN_DOMAIN || !config.MAILGUN_REPORT_RECIPIENT_EMAIL)) {
+    (logger || console).warn('Warning: Report emails are enabled, but Mailgun configuration is incomplete.');
   }
   if (!config.HUBSPOT_INVOICE_OBJECT_TYPE_ID) {
     (logger || console).warn('Warning: HUBSPOT_INVOICE_OBJECT_TYPE_ID is not set. Invoice creation will likely fail.');

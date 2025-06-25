@@ -64,26 +64,40 @@ function validateHubSpotConfig() {
     }
   });
 
-  // Check SES email configuration
-  if (!config.SES_SENDER_EMAIL) {
-    results.warnings.push('SES_SENDER_EMAIL not configured - error notifications and reports may fail');
-    results.suggestions.push('Set AWS_SES_ERROR_FROM_EMAIL or AWS_SES_REPORT_FROM_EMAIL');
+  // Check Mailgun email configuration
+  if (!config.MAILGUN_API_KEY) {
+    results.warnings.push('MAILGUN_API_KEY not configured - error notifications and reports may fail');
+    results.suggestions.push('Set MAILGUN_API_KEY');
   } else {
-    results.valid.push(`SES_SENDER_EMAIL: ${config.SES_SENDER_EMAIL}`);
+    results.valid.push('MAILGUN_API_KEY: Configured');
   }
 
-  if (!config.SES_ERROR_RECIPIENT_EMAIL) {
-    results.warnings.push('SES_ERROR_RECIPIENT_EMAIL not configured - error notifications may fail');
-    results.suggestions.push('Set AWS_SES_ERROR_TO_EMAIL');
+  if (!config.MAILGUN_DOMAIN) {
+    results.warnings.push('MAILGUN_DOMAIN not configured - error notifications and reports may fail');
+    results.suggestions.push('Set MAILGUN_DOMAIN');
   } else {
-    results.valid.push(`SES_ERROR_RECIPIENT_EMAIL: ${config.SES_ERROR_RECIPIENT_EMAIL}`);
+    results.valid.push(`MAILGUN_DOMAIN: ${config.MAILGUN_DOMAIN}`);
   }
 
-  if (!config.SES_REPORT_RECIPIENT_EMAIL) {
-    results.warnings.push('SES_REPORT_RECIPIENT_EMAIL not configured - report emails may fail');
-    results.suggestions.push('Set AWS_SES_REPORT_TO_EMAIL');
+  if (!config.MAILGUN_SENDER_EMAIL) {
+    results.warnings.push('MAILGUN_SENDER_EMAIL not configured - error notifications and reports may fail');
+    results.suggestions.push('Set MAILGUN_SENDER_EMAIL');
   } else {
-    results.valid.push(`SES_REPORT_RECIPIENT_EMAIL: ${config.SES_REPORT_RECIPIENT_EMAIL}`);
+    results.valid.push(`MAILGUN_SENDER_EMAIL: ${config.MAILGUN_SENDER_EMAIL}`);
+  }
+
+  if (!config.MAILGUN_ERROR_RECIPIENT_EMAIL) {
+    results.warnings.push('MAILGUN_ERROR_RECIPIENT_EMAIL not configured - error notifications may fail');
+    results.suggestions.push('Set MAILGUN_ERROR_RECIPIENT_EMAIL');
+  } else {
+    results.valid.push(`MAILGUN_ERROR_RECIPIENT_EMAIL: ${config.MAILGUN_ERROR_RECIPIENT_EMAIL}`);
+  }
+
+  if (!config.MAILGUN_REPORT_RECIPIENT_EMAIL) {
+    results.warnings.push('MAILGUN_REPORT_RECIPIENT_EMAIL not configured - report emails may fail');
+    results.suggestions.push('Set MAILGUN_REPORT_RECIPIENT_EMAIL');
+  } else {
+    results.valid.push(`MAILGUN_REPORT_RECIPIENT_EMAIL: ${config.MAILGUN_REPORT_RECIPIENT_EMAIL}`);
   }
 
   // Check S3 configuration
@@ -163,10 +177,12 @@ HUBSPOT_INVOICE_STATUS_PROPERTY=hs_status
 INVOICE_CURRENCY=USD
 INVOICE_DUE_DAYS=30
 
-# SES Email Configuration (for error notifications and reports)
-SES_SENDER_EMAIL=your-sender-email@domain.com
-SES_ERROR_RECIPIENT_EMAIL=your-error-email@domain.com
-SES_REPORT_RECIPIENT_EMAIL=your-report-email@domain.com
+# Mailgun Email Configuration (for error notifications and reports)
+MAILGUN_API_KEY=your_mailgun_api_key_here
+MAILGUN_DOMAIN=your-domain.com
+MAILGUN_SENDER_EMAIL=noreply@your-domain.com
+MAILGUN_ERROR_RECIPIENT_EMAIL=your-error-email@domain.com
+MAILGUN_REPORT_RECIPIENT_EMAIL=your-report-email@domain.com
 
 # S3 Configuration
 S3_REPORTS_BUCKET_NAME=your-s3-bucket-name
