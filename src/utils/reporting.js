@@ -16,13 +16,24 @@ function arrayToCsv(dataArray) {
   if (!dataArray || dataArray.length === 0) {
     return '';
   }
-  const headers = Object.keys(dataArray[0]);
+  
+  // Filter out empty objects and ensure all objects have the same structure
+  const validRows = dataArray.filter(row => row && Object.keys(row).length > 0);
+  
+  if (validRows.length === 0) {
+    return '';
+  }
+  
+  const headers = Object.keys(validRows[0]);
   const csvRows = [];
   csvRows.push(headers.join(','));
 
-  for (const row of dataArray) {
+  for (const row of validRows) {
     const values = headers.map(header => {
-      const escaped = ('' + row[header]).replace(/"/g, '""'); // Escape double quotes
+      const value = row[header];
+      // Handle undefined, null, and other falsy values
+      const stringValue = value !== undefined && value !== null ? String(value) : '';
+      const escaped = stringValue.replace(/"/g, '""'); // Escape double quotes
       return `"${escaped}"`; // Enclose in double quotes
     });
     csvRows.push(values.join(','));
@@ -51,44 +62,60 @@ const generateReportContent = (reportData) => {
 
   // Add individual invoice details
   if (reportData.invoices && reportData.invoices.length > 0) {
-    reportRows.push({}); // Empty row for spacing
+    // Add spacing row with consistent structure
     reportRows.push({
-      'Invoice Details': '=== SUCCESSFUL INVOICES ===',
-      '': '',
-      '': '',
-      '': '',
-      '': ''
+      'Report Date': '',
+      'Total Memberships Processed': '',
+      'Successful Invoices': '',
+      'Failed Invoices': '',
+      'Success Rate': ''
+    });
+    
+    reportRows.push({
+      'Report Date': '=== SUCCESSFUL INVOICES ===',
+      'Total Memberships Processed': '',
+      'Successful Invoices': '',
+      'Failed Invoices': '',
+      'Success Rate': ''
     });
 
     reportData.invoices.forEach(invoice => {
       reportRows.push({
-        'Name': invoice.name,
-        'ID': invoice.id,
-        'Type': invoice.type,
-        'Invoice ID': invoice.invoiceId,
-        'Amount': invoice.invoiceAmount,
-        'PDF Link': invoice.pdfLink,
-        'Payment Link': invoice.paymentLink
+        'Report Date': invoice.name || 'Unknown',
+        'Total Memberships Processed': invoice.id || 'N/A',
+        'Successful Invoices': invoice.type || 'N/A',
+        'Failed Invoices': invoice.invoiceId || 'N/A',
+        'Success Rate': invoice.invoiceAmount || 'N/A'
       });
     });
   }
 
   // Add failure details
   if (reportData.failures && reportData.failures.length > 0) {
-    reportRows.push({}); // Empty row for spacing
+    // Add spacing row with consistent structure
     reportRows.push({
-      'Failure Details': '=== FAILED INVOICES ===',
-      '': '',
-      '': '',
-      '': '',
-      '': ''
+      'Report Date': '',
+      'Total Memberships Processed': '',
+      'Successful Invoices': '',
+      'Failed Invoices': '',
+      'Success Rate': ''
+    });
+    
+    reportRows.push({
+      'Report Date': '=== FAILED INVOICES ===',
+      'Total Memberships Processed': '',
+      'Successful Invoices': '',
+      'Failed Invoices': '',
+      'Success Rate': ''
     });
 
     reportData.failures.forEach(failure => {
       reportRows.push({
-        'Name': failure.name,
-        'ID': failure.id,
-        'Reason': failure.reason
+        'Report Date': failure.name || 'Unknown',
+        'Total Memberships Processed': failure.id || 'N/A',
+        'Successful Invoices': '',
+        'Failed Invoices': '',
+        'Success Rate': failure.reason || 'Unknown error'
       });
     });
   }
@@ -162,14 +189,14 @@ const sendReportEmail = async (reportS3Url, reportData) => {
   const subject = `HubSpot Invoicing Monthly Report - ${new Date(reportData.date).toLocaleDateString()}`;
   let bodyText = `HubSpot Invoicing Monthly Report\n\n`;
   bodyText += `Date: ${new Date(reportData.date).toLocaleString()}\n`;
-  bodyText += `Total Companies Processed: ${reportData.totalCompaniesProcessed}\n`;
-  bodyText += `Successful Invoices: ${reportData.successfulInvoices}\n`;
-  bodyText += `Failed Invoices: ${reportData.failedInvoices}\n\n`;
+  bodyText += `Total Memberships Processed: ${reportData.totalMembershipsProcessed || 0}\n`;
+  bodyText += `Successful Invoices: ${reportData.successfulInvoices || 0}\n`;
+  bodyText += `Failed Invoices: ${reportData.failedInvoices || 0}\n\n`;
   bodyText += `The full report is available at: ${reportS3Url}\n\n`;
   bodyText += `Summary of Successful Invoices:\n`;
   if (reportData.invoices && reportData.invoices.length > 0) {
     reportData.invoices.slice(0, 10).forEach(inv => { // Show first 10 as example
-        bodyText += `- Company: ${inv.companyName || inv.companyId}, Invoice ID: ${inv.invoiceId}, Amount: ${inv.invoiceAmount}\n`;
+        bodyText += `- ${inv.name || 'Unknown'}: Invoice ID: ${inv.invoiceId || 'N/A'}, Amount: ${inv.invoiceAmount || 'N/A'}\n`;
     });
     if (reportData.invoices.length > 10) bodyText += `...and ${reportData.invoices.length - 10} more.\n`;
   } else {
@@ -196,4 +223,5 @@ const sendReportEmail = async (reportS3Url, reportData) => {
 module.exports = {
   generateAndStoreReport,
   sendReportEmail,
+  generateReportContent,
 };

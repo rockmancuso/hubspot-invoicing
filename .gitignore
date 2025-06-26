@@ -2,3 +2,5 @@ node_modules
 .DS_Store
 dist
 hubspot.config.yml
+CLAUDE.md
+hubspot-invoicing-architecture.md

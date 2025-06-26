@@ -46,7 +46,7 @@ const config = {
   MEMBERSHIP_TYPE_INDIVIDUAL: process.env.MEMBERSHIP_TYPE_INDIVIDUAL || 'Individual',
   
   // Pricing Configuration
-  INDIVIDUAL_MEMBERSHIP_FEE: parseFloat(process.env.INDIVIDUAL_MEMBERSHIP_FEE) || 350,
+  INDIVIDUAL_MEMBERSHIP_FEE: parseFloat(process.env.INDIVIDUAL_MEMBERSHIP_FEE) || 349,
   
   // END NEW CONFIGS
 

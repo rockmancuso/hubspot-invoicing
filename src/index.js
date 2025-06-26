@@ -208,7 +208,7 @@ exports.handler = async (event, context) => {
           default:
             throw new Error(`Unknown membership type: ${companyMembershipType || 'Individual'}`);
         }
-        logger.info(`Invoice amount for ${memberInfo.name}: $${priceResult.totalPrice}`);
+        logger.info(`Invoice amount for ${memberInfo.name}: ${logger.formatCurrency(priceResult.totalPrice)}`);
 
         //-------------------------------------------------------------------
         // D. CREATE HUBSPOT INVOICE RECORD FIRST (without PDF initially)
@@ -321,11 +321,11 @@ exports.handler = async (event, context) => {
                   return `${contactName}${addressLine ? '<br>' + addressLine : ''}`;
                 })(),
           line_items      : priceResult.lineItems.map(li =>
-              `<tr><td><b>${li.name}</b><br><small>${li.description}</small></td><td style="text-align:center;">${li.quantity}</td><td class="price">${li.price.toFixed(2)}</td><td class="amount">${(li.price*li.quantity).toFixed(2)}</td></tr>`
+              `<tr><td><b>${li.name}</b><br><small>${li.description}</small></td><td style="text-align:center;">${li.quantity}</td><td class="price">${logger.formatCurrency(li.price)}</td><td class="amount">${logger.formatCurrency(li.price*li.quantity)}</td></tr>`
           ).join(''),
-          subtotal        : `${priceResult.totalPrice.toFixed(2)}`,
-          total           : `${priceResult.totalPrice.toFixed(2)}`,
-          balance_due     : `${priceResult.totalPrice.toFixed(2)}`,
+          subtotal        : logger.formatCurrency(priceResult.totalPrice),
+          total           : logger.formatCurrency(priceResult.totalPrice),
+          balance_due     : logger.formatCurrency(priceResult.totalPrice),
           qr_code         : qrCodeDataUrl || '', // QR code for payment
           payment_link    : paymentLink || ''    // Direct payment link
         };

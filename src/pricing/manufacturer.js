@@ -3,6 +3,23 @@ const config = require('../config');
 const logger = require('../utils/logger');
 
 /**
+ * Parses the dollar amount from a membership level string.
+ * Extracts the price that appears before any parentheses.
+ * @param {string} membershipLevelString - The membership level string (e.g., "$1,500 (<$5M)")
+ * @returns {number} - The parsed price amount
+ */
+const parseMembershipLevelPrice = (membershipLevelString) => {
+  // Extract the part before the first parenthesis (if any)
+  const beforeParenthesis = membershipLevelString.split('(')[0].trim();
+  
+  // Remove dollar sign and commas, then parse as float
+  const cleanPrice = beforeParenthesis.replace(/[$,]/g, '');
+  const parsedPrice = parseFloat(cleanPrice);
+  
+  return parsedPrice;
+};
+
+/**
  * Maps manufacturer membership level to the corresponding product ID
  * @param {number} price - The membership fee amount
  * @returns {string} - The product ID for the membership level
@@ -79,7 +96,7 @@ const calculateManufacturerPrice = (companyProperties) => {
   }
 
   // Parse the string value (e.g., "$1,500" or "1500") into a number
-  const parsedPrice = parseFloat(String(membershipLevelString).replace(/[^0-9.-]+/g, ""));
+  const parsedPrice = parseMembershipLevelPrice(membershipLevelString);
 
   if (isNaN(parsedPrice) || parsedPrice <= 0) {
     const errorMsg = `Manufacturer membership level property '${membershipLevelProperty}' ('${membershipLevelString}') does not contain a valid positive price for company: ${companyProperties.hs_object_id || 'N/A'}`;
@@ -95,7 +112,7 @@ const calculateManufacturerPrice = (companyProperties) => {
       name: `Manufacturer Membership Fee`,
       quantity: 1,
       price: determinedPrice,
-      description: `Membership fee based on level: ${membershipLevelString}.`,
+      description: membershipLevelString,
       productId: getManufacturerProductId(determinedPrice),
       billing_frequency: 'One-Time'
     },

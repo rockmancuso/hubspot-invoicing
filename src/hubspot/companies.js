@@ -32,6 +32,7 @@ const getExpiringCompanyMemberships = async (hubspotClient) => {
     config.HUBSPOT_DISTRIBUTOR_US_STATES_CHECKBOX_PROPERTY,
     config.HUBSPOT_DISTRIBUTOR_CAN_PROVINCES_CHECKBOX_PROPERTY,
     config.HUBSPOT_DISTRIBUTOR_NON_NA_TERRITORIES_CHECKBOX_PROPERTY,
+    config.HUBSPOT_MANUFACTURER_MEMBERSHIP_LEVEL_PROPERTY,
   ].filter(Boolean);
 
   const CUSTOM_OBJECT_TYPE_ID = '2-45511388';
@@ -113,6 +114,14 @@ const getExpiringCompanyMemberships = async (hubspotClient) => {
           membershipType: company.properties[config.HUBSPOT_MEMBERSHIP_TYPE_PROPERTY]
         });
 
+        // DEBUG: Log the raw membership data for manufacturer membership level
+        if (company.properties[config.HUBSPOT_MEMBERSHIP_TYPE_PROPERTY] === config.MEMBERSHIP_TYPE_MANUFACTURER) {
+          logger.info(`Raw membership data for manufacturer ${companyId}:`, {
+            membershipLevel: membership.properties[config.HUBSPOT_MANUFACTURER_MEMBERSHIP_LEVEL_PROPERTY],
+            membershipLevelProperty: config.HUBSPOT_MANUFACTURER_MEMBERSHIP_LEVEL_PROPERTY
+          });
+        }
+
         enriched.push({
           id: membership.id,
           companyId,
@@ -128,6 +137,8 @@ const getExpiringCompanyMemberships = async (hubspotClient) => {
             zip:                            company.properties.zip,
             [config.HUBSPOT_MEMBERSHIP_TYPE_PROPERTY]:
                                             company.properties[config.HUBSPOT_MEMBERSHIP_TYPE_PROPERTY],
+            [config.HUBSPOT_MANUFACTURER_MEMBERSHIP_LEVEL_PROPERTY]:
+                                            membership.properties[config.HUBSPOT_MANUFACTURER_MEMBERSHIP_LEVEL_PROPERTY],
             number_of_territories:          company.properties.number_of_territories,
             annual_sales_volume:            company.properties.annual_sales_volume,
             // Distributor territory properties now come from membership object
@@ -137,6 +148,8 @@ const getExpiringCompanyMemberships = async (hubspotClient) => {
                                             membership.properties[config.HUBSPOT_DISTRIBUTOR_CAN_PROVINCES_CHECKBOX_PROPERTY],
             [config.HUBSPOT_DISTRIBUTOR_NON_NA_TERRITORIES_CHECKBOX_PROPERTY]:
                                             membership.properties[config.HUBSPOT_DISTRIBUTOR_NON_NA_TERRITORIES_CHECKBOX_PROPERTY],
+            [config.HUBSPOT_MANUFACTURER_MEMBERSHIP_LEVEL_PROPERTY]:
+                                            membership.properties[config.HUBSPOT_MANUFACTURER_MEMBERSHIP_LEVEL_PROPERTY],
           },
         });
 
