@@ -118,6 +118,14 @@ const calculateDistributorPrice = (membershipProperties) => {
       productId: '2463768667', // $929 membership product ID
       billing_frequency: 'One-Time'
     },
+    {
+      name: 'Home State Listing',
+      quantity: 1,
+      price: 0,
+      description: `FREE listing in home state of ${homeState || 'Not specified'}`,
+      productId: '25230586526', // HubSpot product ID for free home state listing
+      billing_frequency: 'One-Time'
+    }
   ];
 
   if (totalBillableTerritories > 0) {

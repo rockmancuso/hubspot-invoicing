@@ -28,7 +28,8 @@ exports.handler = async (event, context) => {
   const isDryRun = event.dry_run === true;
   const testLimit = event.pdf_test_limit;        // *** NEW
   const fullTestLimit = event.full_test_limit;   // *** NEW - for limited full runs
-  logger.info('HubSpot Invoicing Lambda triggered', { event, isDryRun, testLimit, fullTestLimit });
+  const keepDraft = event.keep_draft === true;   // *** NEW - keep invoices in draft status
+  logger.info('HubSpot Invoicing Lambda triggered', { event, isDryRun, testLimit, fullTestLimit, keepDraft });
 
   if (isDryRun) {
     logger.warn('--- RUNNING IN DRY-RUN MODE --- No data will be written to HubSpot or S3.');
@@ -38,6 +39,9 @@ exports.handler = async (event, context) => {
   }
   if (fullTestLimit) {
     logger.warn(`--- RUNNING IN LIMITED FULL MODE --- Processing up to ${fullTestLimit} members with full HubSpot operations.`);
+  }
+  if (keepDraft) {
+    logger.warn('--- KEEPING INVOICES IN DRAFT STATUS --- Invoices will not be set to "open" status.');
   }
   // ------------------------------------------------------------------------
 
@@ -210,6 +214,19 @@ exports.handler = async (event, context) => {
         // D. CREATE HUBSPOT INVOICE RECORD FIRST (without PDF initially)
         //     • Skip when dry-run OR pdf-test (but allow full-test)
         //-------------------------------------------------------------------
+        
+        // Get the paid through date from the appropriate property based on member type
+        let paidThroughDate = null;
+        if (member.type === 'Company') {
+          // For company memberships, use the next renewal date property
+          paidThroughDate = memberInfo.properties[config.HUBSPOT_NEXT_RENEWAL_DATE_PROPERTY];
+        } else {
+          // For individual memberships, use the individual paid through date property
+          paidThroughDate = memberInfo.properties[config.HUBSPOT_INDIVIDUAL_PAID_THROUGH_DATE_PROPERTY];
+        }
+        
+        logger.info(`Paid through date for ${memberInfo.name}: ${paidThroughDate ? new Date(paidThroughDate).toISOString().split('T')[0] : 'Not found'}`);
+        
         let createdInvoice;
         if (isDryRun || testLimit) {                                  // Skip only dry-run and PDF-test
           logger.info(`[DRY/PDF TEST RUN] Would create HubSpot Invoice for ${memberInfo.name}`);
@@ -221,6 +238,8 @@ exports.handler = async (event, context) => {
             invoiceAmount: priceResult.totalPrice,
             lineItems    : priceResult.lineItems,
             pdfLink      : '', // Will be updated after PDF generation
+            keepDraft    : keepDraft, // *** NEW - control invoice status
+            paidThroughDate: paidThroughDate, // *** NEW - use paid through date as due date
           });
         }
 
@@ -251,6 +270,11 @@ exports.handler = async (event, context) => {
         //-------------------------------------------------------------------
         const invoiceDate = new Date().toLocaleDateString('en-US');
         
+        // Calculate due date for PDF (same logic as HubSpot invoice)
+        const { calculateDueDate } = require('./hubspot/invoices');
+        const pdfDueDate = calculateDueDate(paidThroughDate);
+        const formattedDueDate = new Date(pdfDueDate).toLocaleDateString('en-US');
+        
         // DEBUG: Log address data for company memberships
         if (member.type === 'Company') {
           logger.info(`Company address data for ${memberInfo.name}:`, {
@@ -267,7 +291,7 @@ exports.handler = async (event, context) => {
           logo_base64     : logoBase64,
           invoice_number  : `INV-${memberInfo.id}-${Date.now()}`,
           invoice_date    : invoiceDate,
-          due_date        : new Date(Date.now() + 30*24*60*60*1000).toLocaleDateString('en-US'),
+          due_date        : formattedDueDate, // *** NEW - use calculated due date
           bill_to_address : member.type === 'Company'
               ? (() => {
                   const contactName = memberInfo.contactName || 'Primary Contact';

@@ -17,6 +17,42 @@ The system runs monthly, triggered by a CloudWatch Event. It performs the follow
 
 Refer to the [`hubspot-invoicing-architecture.md`](hubspot-invoicing-architecture.md) document for a detailed system architecture and design.
 
+## Testing and Development
+
+The Lambda function supports several testing modes that can be controlled via the event payload:
+
+### Test Flags
+
+- **`dry_run`**: When set to `true`, the function runs in dry-run mode without creating any HubSpot records or storing files in S3.
+- **`pdf_test_limit`**: Limits the number of members processed for PDF generation testing.
+- **`full_test_limit`**: Limits the number of members processed for full end-to-end testing.
+- **`keep_draft`**: When set to `true`, invoices are created but kept in "draft" status instead of being set to "open". This is useful for testing invoice creation without making them payable.
+
+### Example Test Payloads
+
+```json
+// Dry run - no data written
+{
+  "dry_run": true
+}
+
+// PDF test with limited members
+{
+  "pdf_test_limit": 3
+}
+
+// Full test with limited members
+{
+  "full_test_limit": 2
+}
+
+// Keep invoices in draft status for testing
+{
+  "keep_draft": true,
+  "full_test_limit": 2
+}
+```
+
 ## Project Structure
 
 ```

@@ -85,6 +85,10 @@ const config = {
   INVOICE_CURRENCY: process.env.INVOICE_CURRENCY || 'USD',
   INVOICE_DUE_DAYS: parseInt(process.env.INVOICE_DUE_DAYS, 10) || 30,
 
+  // Month Control Settings
+  INVOICE_GENERATION_MONTH_OFFSET: parseInt(process.env.INVOICE_GENERATION_MONTH_OFFSET, 10) || 0, // 0 = current month, 1 = next month, etc.
+  INVOICE_GENERATION_DAY_OF_MONTH: parseInt(process.env.INVOICE_GENERATION_DAY_OF_MONTH, 10) || 0, // 0 = last day of month, 1-31 = specific day
+
   // S3 Reporting Configuration
   S3_REPORTS_BUCKET_NAME: process.env.S3_REPORTS_BUCKET_NAME || process.env.AWS_S3_REPORT_BUCKET_NAME,
   // S3_REPORT_KEY_PREFIX: process.env.S3_REPORT_KEY_PREFIX || 'reports', // Prefix is handled in reporting.js

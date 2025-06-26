@@ -1,9 +1,10 @@
 // HubSpot Company Data Retrieval
 const config  = require('../config');
 const logger  = require('../utils/logger');
+const { calculateTargetDate } = require('./invoices');
 
 /**
- * Fetches company memberships expiring at the end of the current month and
+ * Fetches company memberships expiring at the configured target date and
  * enriches them with company data.
  *
  * @async
@@ -11,13 +12,10 @@ const logger  = require('../utils/logger');
  * @returns {Promise<Array<object>>} Array of enriched membership objects.
  */
 const getExpiringCompanyMemberships = async (hubspotClient) => {
-  logger.info('Fetching company memberships expiring at the end of the current month…');
+  logger.info('Fetching company memberships expiring at the configured target date…');
 
-  // Determine the target (last day of this month, midnight UTC)
-  const today              = new Date();
-  const lastDayOfMonth     = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-  lastDayOfMonth.setUTCHours(0, 0, 0, 0);
-  const targetTs = lastDayOfMonth.getTime();
+  // Use the new target date calculation instead of hardcoding last day of current month
+  const targetTs = calculateTargetDate();
 
   // Configured renewal-date property
   const nextRenewalDateProperty = config.HUBSPOT_NEXT_RENEWAL_DATE_PROPERTY;
@@ -59,7 +57,7 @@ const getExpiringCompanyMemberships = async (hubspotClient) => {
       };
 
       logger.info(
-        `Searching memberships where ${nextRenewalDateProperty} = ${lastDayOfMonth.toISOString().slice(0,10)}`,
+        `Searching memberships where ${nextRenewalDateProperty} = ${new Date(targetTs).toISOString().slice(0,10)}`,
         { searchRequest }
       );
 

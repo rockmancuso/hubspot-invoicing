@@ -1,6 +1,7 @@
 // HubSpot Contact Data Operations
 const config = require('../config');
 const logger = require('../utils/logger');
+const { calculateTargetDate } = require('./invoices');
 
 /**
  * Fetches the primary contact for a given company.
@@ -30,7 +31,7 @@ const getPrimaryContact = async (hubspotClient, companyId) => {
       return null;
     }
 
-    // If a specific “primary contact” association type is configured, try that first
+    // If a specific "primary contact" association type is configured, try that first
     const primaryContactAssociationTypeId = config.HUBSPOT_PRIMARY_CONTACT_ASSOCIATION_TYPE_ID;
     if (primaryContactAssociationTypeId) {
       const primaryAssoc = associationsResponse.results.find((assoc) =>
@@ -79,7 +80,7 @@ const getPrimaryContact = async (hubspotClient, companyId) => {
 };
 
 /**
- * Fetches individual members whose memberships expire at the end of the current month.
+ * Fetches individual members whose memberships expire at the configured target date.
  *
  * @async
  * @param {hubspot.Client} hubspotClient The initialized HubSpot client.
@@ -93,11 +94,8 @@ const getExpiringIndividualMemberships = async (hubspotClient) => {
     throw new Error('Configuration for Individual Paid Through Date property is missing.');
   }
 
-  // Target = last calendar day of this month in UTC, midnight
-  const today = new Date();
-  const lastDayOfMonth = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0));
-  lastDayOfMonth.setUTCHours(0, 0, 0, 0);
-  const targetDateTimestamp = lastDayOfMonth.getTime();
+  // Use the new target date calculation instead of hardcoding last day of current month
+  const targetDateTimestamp = calculateTargetDate();
 
   const propertiesToFetch = [
     'firstname',

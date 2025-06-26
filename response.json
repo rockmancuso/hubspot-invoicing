@@ -1,1 +1,1 @@
-{"statusCode":200,"body":"{\"message\":\"HubSpot Invoicing complete.\",\"processed\":3,\"failed\":0,\"reportUrl\":\"s3://cla-hs-invoice-reports/reports/2025/06/23/invoice-summary-1750691431534.csv\"}"}
+{"statusCode":200,"body":"{\"message\":\"HubSpot Invoicing complete.\",\"processed\":4,\"failed\":0,\"reportUrl\":\"s3://cla-hs-invoice-reports/reports/2025/06/26/invoice-summary-1750915034199.csv\"}"}

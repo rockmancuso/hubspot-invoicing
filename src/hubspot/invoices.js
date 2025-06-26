@@ -3,10 +3,52 @@ const config = require('../config');
 const logger = require('../utils/logger');
 
 /**
+ * Calculates the target date for invoice generation based on configuration.
+ * This allows generating invoices for members expiring in future months.
+ * @returns {number} Timestamp for the target date (midnight UTC).
+ */
+function calculateTargetDate() {
+  const monthOffset = config.INVOICE_GENERATION_MONTH_OFFSET || 0;
+  const dayOfMonth = config.INVOICE_GENERATION_DAY_OF_MONTH || 0;
+  
+  const today = new Date();
+  const targetMonth = today.getMonth() + monthOffset;
+  const targetYear = today.getFullYear() + Math.floor(targetMonth / 12);
+  const adjustedMonth = targetMonth % 12;
+  
+  let targetDate;
+  
+  if (dayOfMonth === 0) {
+    // Last day of the target month
+    targetDate = new Date(targetYear, adjustedMonth + 1, 0);
+  } else {
+    // Specific day of the target month
+    targetDate = new Date(targetYear, adjustedMonth, dayOfMonth);
+  }
+  
+  // Set to midnight UTC
+  targetDate.setUTCHours(0, 0, 0, 0);
+  
+  const targetTimestamp = targetDate.getTime();
+  
+  logger.info(`Invoice generation target date: ${targetDate.toISOString().slice(0, 10)} (month offset: ${monthOffset}, day: ${dayOfMonth === 0 ? 'last day' : dayOfMonth})`);
+  
+  return targetTimestamp;
+}
+
+/**
  * Calculates the due date for an invoice.
+ * @param {string|number} [paidThroughDate] - The paid through date (timestamp or ISO string). If provided, this becomes the due date.
  * @returns {string} ISO formatted date string (YYYY-MM-DD).
  */
-function calculateDueDate() {
+function calculateDueDate(paidThroughDate = null) {
+  if (paidThroughDate) {
+    // Convert to Date object if it's a timestamp
+    const dueDate = new Date(paidThroughDate);
+    return dueDate.toISOString().split('T')[0];
+  }
+  
+  // Fallback to original logic if no paid through date provided
   const dueDays = parseInt(config.INVOICE_DUE_DAYS, 10) || 30;
   const dueDate = new Date();
   dueDate.setDate(dueDate.getDate() + dueDays);
@@ -206,7 +248,7 @@ const findExistingOpenInvoice = async (hubspotClient, { companyId, contactId }) 
  * Creates an invoice record in HubSpot following the official API workflow.
  * Step 1: Create draft invoice with minimal properties
  * Step 2: Add associations (contact, line items, company)
- * Step 3: Update properties and move to open status
+ * Step 3: Update properties and move to open status (unless keepDraft is true)
  *
  * @async
  * @param {hubspot.Client} hubspotClient The initialized HubSpot client.
@@ -216,12 +258,14 @@ const findExistingOpenInvoice = async (hubspotClient, { companyId, contactId }) 
  * @param {number} invoiceData.invoiceAmount - The total amount for the invoice.
  * @param {Array<object>} invoiceData.lineItems - Line items for the invoice.
  * @param {string} invoiceData.pdfLink - The public URL to the generated PDF invoice in S3.
+ * @param {boolean} [invoiceData.keepDraft] - If true, keep invoice in draft status instead of setting to open.
+ * @param {string|number} [invoiceData.paidThroughDate] - The paid through date to use as the due date.
  * @returns {Promise<object>} A promise that resolves to the created HubSpot invoice object.
  */
 const createInvoice = async (hubspotClient, invoiceData) => {
-  const { contactId, companyId, invoiceAmount, lineItems, pdfLink } = invoiceData;
+  const { contactId, companyId, invoiceAmount, lineItems, pdfLink, keepDraft, paidThroughDate } = invoiceData;
 
-  logger.info(`Creating HubSpot invoice record for Company ID: ${companyId}, Contact ID: ${contactId}, Amount: ${invoiceAmount}`);
+  logger.info(`Creating HubSpot invoice record for Company ID: ${companyId}, Contact ID: ${contactId}, Amount: ${invoiceAmount}, Keep Draft: ${keepDraft || false}, Paid Through Date: ${paidThroughDate || 'Not provided'}`);
 
   // Validate configuration before proceeding
   try {
@@ -349,8 +393,12 @@ const createInvoice = async (hubspotClient, invoiceData) => {
       }
     }
 
-    // STEP 3: Update invoice properties and move to open status
-    logger.info('Step 3: Updating invoice properties and setting status to open...');
+    // STEP 3: Update invoice properties and move to open status (unless keepDraft is true)
+    if (keepDraft) {
+      logger.info('Step 3: Updating invoice properties (keeping in draft status)...');
+    } else {
+      logger.info('Step 3: Updating invoice properties and setting status to open...');
+    }
     
     // Validate that we have the required associations for setting status to "open"
     // HubSpot requires: one contact and at least one line item must be associated
@@ -363,8 +411,9 @@ const createInvoice = async (hubspotClient, invoiceData) => {
     }
     
     const updateProperties = {
-      'hs_due_date': calculateDueDate(),
-      'hs_invoice_status': 'open', // Set status to open as per HubSpot API guidance
+      'hs_due_date': calculateDueDate(paidThroughDate),
+      // Conditionally set status based on keepDraft parameter
+      ...(keepDraft ? {} : { 'hs_invoice_status': 'open' }), // Only set to open if keepDraft is false
       // Add any other properties that need to be set after associations
     };
 
@@ -375,7 +424,11 @@ const createInvoice = async (hubspotClient, invoiceData) => {
     );
 
     logger.info(`Invoice ${invoiceId} updated with properties:`, updateProperties);
-    logger.info(`Invoice status set to "open" - invoice is now payable and can be shared`);
+    if (keepDraft) {
+      logger.info(`Invoice kept in draft status - invoice is not yet payable`);
+    } else {
+      logger.info(`Invoice status set to "open" - invoice is now payable and can be shared`);
+    }
     logger.info(`Invoice record created successfully. Invoice ID: ${invoiceId}`);
     
     return createdInvoiceResponse;
@@ -448,4 +501,4 @@ const getInvoicePaymentLink = async (hubspotClient, invoiceId) => {
   }
 };
 
-module.exports = { createInvoice, findExistingOpenInvoice, updateCompanyMembershipDues, getInvoicePaymentLink };
+module.exports = { createInvoice, findExistingOpenInvoice, updateCompanyMembershipDues, getInvoicePaymentLink, calculateTargetDate, calculateDueDate };
