@@ -30,7 +30,7 @@
     .summary-table .label { text-align: left; }
     .summary-table .value { text-align: right; }
     .summary-table .total td { font-weight: bold; font-size: 14px; border-top: 2px solid #333; border-bottom: none; }
-    .comments { font-size: 12px; color: #777; margin-top: 40px; line-height: 1.4; border-top: 1px solid #ddd; padding-top: 20px; }
+    .comments { font-size: 12px; color: #777; margin-top: 30px; line-height: 1.4; border-top: 1px solid #ddd; padding-top: 20px; }
     .green {color:#78c021 !important;}
     .blue {color:#0070cc !important;}
     .caps {text-transform:uppercase;}
@@ -108,15 +108,15 @@
             <li>Mail a check to the address above</li>
             <li>Call (800) 570-5629 to pay by phone</li>
           </ul>
+          <div style="margin-top: 15px; font-size: 11px; color: #0070cc; word-break: break-all;">
+            <strong>Direct Payment Link:</strong>
+            <a href="{{payment_link}}" style="color: #0070cc;">{{payment_link}}</a>
+          </div>
         </div>
         <div style="text-align: center; flex-shrink: 0;">
           <img src="{{qr_code}}" alt="Payment QR Code" style="width: 120px; height: 120px; border: 1px solid #ddd;" /><br />
           <small style="font-size: 9px; color: #666;">Scan to pay online</small>
         </div>
-      </div>
-      <div style="margin-top: 15px; font-size: 10px; color: #0070cc; word-break: break-all;">
-        <strong>Direct Payment Link:</strong><br />
-        <a href="{{payment_link}}" style="color: #0070cc;">{{payment_link}}</a>
       </div>
     </div>
   </div>

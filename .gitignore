@@ -4,3 +4,6 @@ dist
 hubspot.config.yml
 CLAUDE.md
 hubspot-invoicing-architecture.md
+.vscode
+temp
+response.json

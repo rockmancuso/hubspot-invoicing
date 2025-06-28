@@ -130,7 +130,7 @@ const calculateDistributorPrice = (membershipProperties) => {
 
   if (totalBillableTerritories > 0) {
     lineItems.push({
-      name: `Territory Charges`,
+      name: `Additional Territory Listings`,
       quantity: totalBillableTerritories,
       price: perTerritoryCharge,
       description: `Charge for ${totalBillableTerritories} territories (home state excluded).`, 

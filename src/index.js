@@ -9,7 +9,7 @@ const calculateServiceProviderPrice = require('./pricing/serviceProvider');
 const calculateIndividualPrice = require('./pricing/individual');
 const { logError, sendErrorNotification } = require('./utils/errorHandler');
 const { generateAndStoreReport, sendReportEmail } = require('./utils/reporting');
-const { storePdfInvoice } = require('./utils/storage');
+const { storePdfInvoice, storeProcessingState, getProcessingState, clearProcessingState } = require('./utils/storage');
 const { loadTemplate, populateTemplate, generatePdf, generateQRCode } = require('./pdf/generator');
 const logger = require('./utils/logger');
 const config = require('./config');
@@ -17,6 +17,61 @@ const config = require('./config');
 // *** NEW – utility helper so we can throttle with sleep(…)
 const util = require('util');
 const sleep = util.promisify(setTimeout);
+
+/**
+ * Formats an address with proper line breaks and punctuation
+ * @param {string} address - Street address
+ * @param {string} city - City name
+ * @param {string} state - State abbreviation
+ * @param {string} zip - Postal code
+ * @returns {string} - Formatted address with HTML line breaks
+ */
+function formatAddress(address, city, state, zip) {
+  const parts = [address, city, state, zip].filter(Boolean);
+  
+  if (parts.length === 0) return '';
+  
+  if (parts.length === 1) return parts[0];
+  
+  if (parts.length === 2) {
+    // If we only have 2 parts, assume it's city, state or address, city
+    return parts.join(', ');
+  }
+  
+  if (parts.length === 3) {
+    // If we have 3 parts, assume it's address, city, state or city, state, zip
+    if (state && zip) {
+      // city, state zip format
+      return `${parts[0]}, ${parts[1]} ${parts[2]}`;
+    } else {
+      // address, city, state format
+      return `${parts[0]},<br>${parts[1]}, ${parts[2]}`;
+    }
+  }
+  
+  // Full address: address, city, state zip
+  return `${parts[0]},<br>${parts[1]}, ${parts[2]} ${parts[3]}`;
+}
+
+/**
+ * Sanitizes a name for use in filenames by removing/replacing invalid characters
+ * @param {string} name - The name to sanitize
+ * @returns {string} - The sanitized name safe for filenames
+ */
+function sanitizeNameForFilename(name) {
+  if (!name) return 'Unknown';
+  
+  return name
+    .trim()
+    // Replace invalid filename characters with underscores
+    .replace(/[<>:"/\\|?*]/g, '_')
+    // Replace multiple spaces/underscores with single underscore
+    .replace(/[\s_]+/g, '_')
+    // Remove leading/trailing underscores
+    .replace(/^_+|_+$/g, '')
+    // Limit length to prevent overly long filenames
+    .substring(0, 50);
+}
 
 /**
  * Main handler for the HubSpot Invoicing Lambda.
@@ -29,7 +84,11 @@ exports.handler = async (event, context) => {
   const testLimit = event.pdf_test_limit;        // *** NEW
   const fullTestLimit = event.full_test_limit;   // *** NEW - for limited full runs
   const keepDraft = event.keep_draft === true;   // *** NEW - keep invoices in draft status
-  logger.info('HubSpot Invoicing Lambda triggered', { event, isDryRun, testLimit, fullTestLimit, keepDraft });
+  const clearState = event.clear_state === true; // *** NEW - clear processing state
+  logger.info('HubSpot Invoicing Lambda triggered', { event, isDryRun, testLimit, fullTestLimit, keepDraft, clearState });
+  logger.info(`Lambda function name: ${context.functionName}`);
+  logger.info(`Lambda timeout: ${context.getRemainingTimeInMillis()}ms`);
+  logger.info(`Lambda memory limit: ${context.memoryLimitInMB}MB`);
 
   if (isDryRun) {
     logger.warn('--- RUNNING IN DRY-RUN MODE --- No data will be written to HubSpot or S3.');
@@ -42,6 +101,9 @@ exports.handler = async (event, context) => {
   }
   if (keepDraft) {
     logger.warn('--- KEEPING INVOICES IN DRAFT STATUS --- Invoices will not be set to "open" status.');
+  }
+  if (clearState) {
+    logger.warn('--- CLEARING PROCESSING STATE --- Will start fresh processing.');
   }
   // ------------------------------------------------------------------------
 
@@ -64,6 +126,8 @@ exports.handler = async (event, context) => {
       ...expiringIndividuals.map(m => ({ type: 'Individual', data: m }))
     ];
 
+    logger.info(`Total members found: ${allMembers.length} (${expiringCompanies.length} companies, ${expiringIndividuals.length} individuals)`);
+
     // *** NEW – limit for PDF test runs
     if (testLimit && allMembers.length > testLimit) {
       logger.info(`Limiting run from ${allMembers.length} to ${testLimit} members for PDF test.`);
@@ -76,17 +140,83 @@ exports.handler = async (event, context) => {
       allMembers = allMembers.slice(0, fullTestLimit);
     }
 
+    logger.info(`Final member count to process: ${allMembers.length}`);
+
     if (allMembers.length === 0) {
       logger.info('No memberships to process. Exiting.');
       return { statusCode: 200, body: JSON.stringify({ message: 'No memberships to process.' }) };
+    }
+
+    // ------------------------------------------------------------------------
+    // STATE MANAGEMENT - Track processed members to prevent duplicates
+    // ------------------------------------------------------------------------
+    const runDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+    let processedMemberIds = [];
+    
+    if (!isDryRun && !testLimit && !fullTestLimit) {
+      // Only use state tracking for full production runs
+      if (clearState) {
+        logger.info('Clearing processing state as requested...');
+        await clearProcessingState(runDate);
+      } else {
+        logger.info('Retrieving existing processing state...');
+        processedMemberIds = await getProcessingState(runDate);
+        logger.info(`Found ${processedMemberIds.length} members already processed in previous runs`);
+      }
+    } else {
+      logger.info('Skipping state tracking for test/dry runs');
+    }
+
+    // Filter out already processed members
+    const membersToProcess = allMembers.filter(member => {
+      const memberId = member.data.id;
+      const alreadyProcessed = processedMemberIds.includes(memberId);
+      if (alreadyProcessed) {
+        logger.info(`Skipping already processed member: ${memberId} (${member.data.properties.name || 'Unknown'})`);
+      }
+      return !alreadyProcessed;
+    });
+
+    logger.info(`Members to process after filtering: ${membersToProcess.length} (${allMembers.length - membersToProcess.length} already processed)`);
+    
+    if (processedMemberIds.length > 0) {
+      logger.info(`Already processed member IDs: ${processedMemberIds.slice(0, 5).join(', ')}${processedMemberIds.length > 5 ? '...' : ''}`);
+    }
+
+    if (membersToProcess.length === 0) {
+      logger.info('All members have already been processed. Exiting.');
+      
+      // Update state to show completion
+      if (!isDryRun && !testLimit && !fullTestLimit) {
+        await storeProcessingState(processedMemberIds, runDate, {
+          totalMembers: allMembers.length,
+          isComplete: true
+        });
+        logger.info('🎉 PROCESSING ALREADY COMPLETE! All members processed in previous runs.');
+      }
+      
+      return { statusCode: 200, body: JSON.stringify({ message: 'All members already processed.' }) };
     }
 
     const processedInvoices = [];
     const failedInvoices    = [];
 
     // 2. PROCESS EACH MEMBER
-    for (const member of allMembers) {
+    for (const member of membersToProcess) {
       let memberInfo = {};  // normalized container for data
+
+      // Add progress logging
+      const currentIndex = membersToProcess.indexOf(member) + 1;
+      const progressPercent = Math.round((currentIndex / membersToProcess.length) * 100);
+      const timeRemaining = context.getRemainingTimeInMillis();
+      logger.info(`Processing member ${currentIndex}/${membersToProcess.length} (${progressPercent}%) - Time remaining: ${Math.round(timeRemaining / 1000)}s`);
+
+      // Check if we're running out of time (need at least 30 seconds for reporting)
+      if (timeRemaining < 30000) {
+        logger.warn(`TIMEOUT WARNING: Only ${Math.round(timeRemaining / 1000)}s remaining. Stopping member processing to allow time for reporting.`);
+        logger.warn(`Processed ${processedInvoices.length} successful and ${failedInvoices.length} failed invoices out of ${membersToProcess.length} total members.`);
+        break; // Exit the loop to allow time for reporting
+      }
 
       try {
         //-------------------------------------------------------------------
@@ -301,11 +431,10 @@ exports.handler = async (event, context) => {
                   const state = memberInfo.properties.state || '';
                   const zip = memberInfo.properties.zip || '';
                   
-                  // Build address line - only include if we have meaningful data
-                  const addressParts = [address, city, state, zip].filter(Boolean);
-                  const addressLine = addressParts.length > 0 ? addressParts.join(', ') : '';
+                  // Use the new formatAddress function
+                  const formattedAddress = formatAddress(address, city, state, zip);
                   
-                  return `${contactName}<br>${companyName}${addressLine ? '<br>' + addressLine : ''}`;
+                  return `${contactName}<br>${companyName}${formattedAddress ? '<br>' + formattedAddress : ''}`;
                 })()
               : (() => {
                   const contactName = memberInfo.name || 'Contact';
@@ -314,11 +443,10 @@ exports.handler = async (event, context) => {
                   const state = memberInfo.properties.state || '';
                   const zip = memberInfo.properties.zip || '';
                   
-                  // Build address line - only include if we have meaningful data
-                  const addressParts = [address, city, state, zip].filter(Boolean);
-                  const addressLine = addressParts.length > 0 ? addressParts.join(', ') : '';
+                  // Use the new formatAddress function
+                  const formattedAddress = formatAddress(address, city, state, zip);
                   
-                  return `${contactName}${addressLine ? '<br>' + addressLine : ''}`;
+                  return `${contactName}${formattedAddress ? '<br>' + formattedAddress : ''}`;
                 })(),
           line_items      : priceResult.lineItems.map(li =>
               `<tr><td><b>${li.name}</b><br><small>${li.description}</small></td><td style="text-align:center;">${li.quantity}</td><td class="price">${logger.formatCurrency(li.price)}</td><td class="amount">${logger.formatCurrency(li.price*li.quantity)}</td></tr>`
@@ -336,7 +464,7 @@ exports.handler = async (event, context) => {
         //-------------------------------------------------------------------
         // G. STORE PDF IN S3  (always—even in test mode)
         //-------------------------------------------------------------------
-        const pdfS3Key = `invoices/${new Date().getFullYear()}/${new Date().getMonth()+1}/${memberInfo.type}-${memberInfo.id}.pdf`;
+        const pdfS3Key = `invoices/${new Date().getFullYear()}/${new Date().getMonth()+1}/${memberInfo.type}-Invoice-${sanitizeNameForFilename(memberInfo.name)}-${memberInfo.id}.pdf`;
         let pdfLink;
 
         if (isDryRun) {
@@ -374,6 +502,20 @@ exports.handler = async (event, context) => {
           paymentLink : paymentLink,
         });
 
+        // Update processing state for this member
+        if (!isDryRun && !testLimit && !fullTestLimit) {
+          processedMemberIds.push(memberInfo.id);
+          // Update state every 10 members to avoid too frequent S3 writes
+          if (processedInvoices.length % 10 === 0) {
+            logger.info(`Updating processing state (${processedMemberIds.length} members processed so far)...`);
+            const isComplete = processedMemberIds.length >= allMembers.length;
+            await storeProcessingState(processedMemberIds, runDate, {
+              totalMembers: allMembers.length,
+              isComplete: isComplete
+            });
+          }
+        }
+
       } catch (memberError) {
         logger.error(`Failed ${memberInfo.name || member.data.id}:`, memberError);
         failedInvoices.push({
@@ -390,20 +532,60 @@ exports.handler = async (event, context) => {
     // ----------------------------------------------------------------------
     // 3. FINAL REPORTING
     // ----------------------------------------------------------------------
+    logger.info('=== STARTING FINAL REPORTING SECTION ===');
+    logger.info(`Total members processed: ${membersToProcess.length}`);
+    logger.info(`Successful invoices: ${processedInvoices.length}`);
+    logger.info(`Failed invoices: ${failedInvoices.length}`);
+    
+    // Check if we're approaching Lambda timeout (assuming 15-minute timeout)
+    const timeElapsed = Date.now() - context.getRemainingTimeInMillis();
+    const timeRemaining = context.getRemainingTimeInMillis();
+    logger.info(`Time elapsed: ${Math.round(timeElapsed / 1000)}s, Time remaining: ${Math.round(timeRemaining / 1000)}s`);
+    
+    if (timeRemaining < 30000) { // Less than 30 seconds remaining
+      logger.warn('WARNING: Lambda timeout approaching! Reporting may not complete.');
+    }
+    
     const reportData = {
       date                   : new Date().toISOString(),
-      totalMembershipsProcessed: allMembers.length,
+      totalMembershipsProcessed: membersToProcess.length,
       successfulInvoices     : processedInvoices.length,
       failedInvoices         : failedInvoices.length,
       invoices               : processedInvoices,
       failures               : failedInvoices,
     };
 
+    logger.info('Generating and storing report...');
     const reportUrl = await generateAndStoreReport(reportData);
     logger.info(`Report stored at: ${reportUrl}`);
 
+    logger.info('Checking if report email should be sent...');
+    logger.info(`ENABLE_REPORT_EMAIL config value: ${config.ENABLE_REPORT_EMAIL}`);
     if (config.ENABLE_REPORT_EMAIL === 'true') {
+      logger.info('Report email is enabled, sending...');
       await sendReportEmail(reportUrl, reportData);
+      logger.info('Report email sent successfully.');
+    } else {
+      logger.info('Report email is disabled, skipping.');
+    }
+
+    logger.info('=== FINAL REPORTING SECTION COMPLETED ===');
+
+    // Final state update
+    if (!isDryRun && !testLimit && !fullTestLimit && processedInvoices.length > 0) {
+      logger.info('Performing final processing state update...');
+      const isComplete = processedMemberIds.length >= allMembers.length;
+      await storeProcessingState(processedMemberIds, runDate, {
+        totalMembers: allMembers.length,
+        isComplete: isComplete
+      });
+      logger.info(`Final state: ${processedMemberIds.length} members processed for ${runDate}`);
+      
+      if (isComplete) {
+        logger.info('🎉 ALL MEMBERS PROCESSED SUCCESSFULLY! 🎉');
+      } else {
+        logger.info(`⏳ Processing incomplete: ${processedMemberIds.length}/${allMembers.length} members processed`);
+      }
     }
 
     logger.info('HubSpot Invoicing process completed.');
@@ -414,6 +596,9 @@ exports.handler = async (event, context) => {
         processed: processedInvoices.length,
         failed   : failedInvoices.length,
         reportUrl,
+        totalMembers: allMembers.length,
+        membersProcessed: processedMemberIds.length,
+        runDate,
       }),
     };
 
