@@ -148,4 +148,33 @@ const getExpiringIndividualMemberships = async (hubspotClient) => {
 module.exports = {
   getPrimaryContact,
   getExpiringIndividualMemberships,
+  /**
+   * Fetch a single contact by ID with the standard properties.
+   * @param {hubspot.Client} hubspotClient
+   * @param {string} contactId
+   * @returns {Promise<object>} Contact record
+   */
+  async getContactById(hubspotClient, contactId) {
+    logger.info(`Fetching contact by ID: ${contactId}`);
+    const contactProps = (
+      config.HUBSPOT_CONTACT_PROPERTIES_TO_FETCH ||
+      'email,firstname,lastname,address,city,state,zip'
+    ).split(',');
+
+    try {
+      const contact = await hubspotClient.crm.contacts.basicApi.getById(
+        contactId,
+        contactProps
+      );
+      return contact;
+    } catch (error) {
+      logger.error(
+        `Error fetching contact ${contactId}:`,
+        error.body || error.message
+      );
+      throw error.body?.message
+        ? new Error(`HubSpot API Error (getContactById): ${error.body.message}`)
+        : error;
+    }
+  },
 };

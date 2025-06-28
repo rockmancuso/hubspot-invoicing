@@ -27,6 +27,9 @@ The Lambda function supports several testing modes that can be controlled via th
 - **`pdf_test_limit`**: Limits the number of members processed for PDF generation testing.
 - **`full_test_limit`**: Limits the number of members processed for full end-to-end testing.
 - **`keep_draft`**: When set to `true`, invoices are created but kept in "draft" status instead of being set to "open". This is useful for testing invoice creation without making them payable.
+- **`contact_id`**: Process a single individual contact by HubSpot ID.
+- **`company_id`**: Process a single company membership by HubSpot company ID.
+- **`pdf_only`**: Generate PDFs without creating invoices in HubSpot.
 
 ### Example Test Payloads
 
@@ -50,6 +53,17 @@ The Lambda function supports several testing modes that can be controlled via th
 {
   "keep_draft": true,
   "full_test_limit": 2
+}
+
+// Process a single contact and generate PDF only
+{
+  "contact_id": "123",
+  "pdf_only": true
+}
+
+// Process a single company
+{
+  "company_id": "456"
 }
 ```
 

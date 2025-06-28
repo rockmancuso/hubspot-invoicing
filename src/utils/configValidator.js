@@ -185,9 +185,14 @@ MAILGUN_ERROR_RECIPIENT_EMAIL=your-error-email@domain.com
 MAILGUN_REPORT_RECIPIENT_EMAIL=your-report-email@domain.com
 
 # S3 Configuration
-S3_REPORTS_BUCKET_NAME=your-s3-bucket-name
+  S3_REPORTS_BUCKET_NAME=your-s3-bucket-name
 
-# Other configurations...
+  # Other configurations...
+
+# Optional event flags for Lambda testing
+# contact_id=<HubSpot contact ID>
+# company_id=<HubSpot company ID>
+# pdf_only=true
 `;
 }
 
