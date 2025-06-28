@@ -1,7 +1,7 @@
 // AWS Lambda entry point for HubSpot Invoicing System
 const hubspotClient = require('./hubspot/client');
-const { getExpiringCompanyMemberships } = require('./hubspot/companies');
-const { getPrimaryContact, getExpiringIndividualMemberships } = require('./hubspot/contacts');
+const { getExpiringCompanyMemberships, getCompanyMembershipByCompanyId } = require('./hubspot/companies');
+const { getPrimaryContact, getExpiringIndividualMemberships, getContactById } = require('./hubspot/contacts');
 const { createInvoice, findExistingOpenInvoice, updateCompanyMembershipDues, getInvoicePaymentLink } = require('./hubspot/invoices');
 const calculateDistributorPrice = require('./pricing/distributor');
 const calculateManufacturerPrice = require('./pricing/manufacturer');
@@ -85,7 +85,20 @@ exports.handler = async (event, context) => {
   const fullTestLimit = event.full_test_limit;   // *** NEW - for limited full runs
   const keepDraft = event.keep_draft === true;   // *** NEW - keep invoices in draft status
   const clearState = event.clear_state === true; // *** NEW - clear processing state
-  logger.info('HubSpot Invoicing Lambda triggered', { event, isDryRun, testLimit, fullTestLimit, keepDraft, clearState });
+  const contactId = event.contact_id;            // *** NEW - process single contact
+  const companyId = event.company_id;            // *** NEW - process single company
+  const pdfOnly   = event.pdf_only === true;     // *** NEW - generate PDFs only
+  logger.info('HubSpot Invoicing Lambda triggered', {
+    event,
+    isDryRun,
+    testLimit,
+    fullTestLimit,
+    keepDraft,
+    clearState,
+    contactId,
+    companyId,
+    pdfOnly
+  });
   logger.info(`Lambda function name: ${context.functionName}`);
   logger.info(`Lambda timeout: ${context.getRemainingTimeInMillis()}ms`);
   logger.info(`Lambda memory limit: ${context.memoryLimitInMB}MB`);
@@ -116,8 +129,25 @@ exports.handler = async (event, context) => {
     const { templateHtml, logoBase64 } = loadTemplate();
 
     // 1. DATA RETRIEVAL
-    const expiringCompanies    = await getExpiringCompanyMemberships(hsClient);
-    const expiringIndividuals  = await getExpiringIndividualMemberships(hsClient);
+    let expiringCompanies   = [];
+    let expiringIndividuals = [];
+
+    if (companyId) {
+      logger.info(`Single company mode enabled for companyId: ${companyId}`);
+      const companyMembership = await getCompanyMembershipByCompanyId(hsClient, companyId);
+      if (companyMembership) expiringCompanies.push(companyMembership);
+    } else if (!contactId) {
+      expiringCompanies = await getExpiringCompanyMemberships(hsClient);
+    }
+
+    if (contactId) {
+      logger.info(`Single contact mode enabled for contactId: ${contactId}`);
+      const contact = await getContactById(hsClient, contactId);
+      if (contact) expiringIndividuals.push(contact);
+    } else if (!companyId) {
+      expiringIndividuals = await getExpiringIndividualMemberships(hsClient);
+    }
+
     logger.info(`Found ${expiringCompanies.length} company and ${expiringIndividuals.length} individual memberships.`);
 
     // Unify members into a single list for processing
@@ -153,7 +183,7 @@ exports.handler = async (event, context) => {
     const runDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
     let processedMemberIds = [];
     
-    if (!isDryRun && !testLimit && !fullTestLimit) {
+    if (!isDryRun && !testLimit && !fullTestLimit && !pdfOnly) {
       // Only use state tracking for full production runs
       if (clearState) {
         logger.info('Clearing processing state as requested...');
@@ -187,7 +217,7 @@ exports.handler = async (event, context) => {
       logger.info('All members have already been processed. Exiting.');
       
       // Update state to show completion
-      if (!isDryRun && !testLimit && !fullTestLimit) {
+      if (!isDryRun && !testLimit && !fullTestLimit && !pdfOnly) {
         await storeProcessingState(processedMemberIds, runDate, {
           totalMembers: allMembers.length,
           isComplete: true
@@ -253,11 +283,14 @@ exports.handler = async (event, context) => {
         //-------------------------------------------------------------------
         // B. DUPLICATE CHECK
         //-------------------------------------------------------------------
-        const existingInvoice = await findExistingOpenInvoice(hsClient, { contactId: memberInfo.contactId });
-        if (existingInvoice) {
-          logger.warn(`Skipping ${memberInfo.name} – open invoice ${existingInvoice.id} already exists.`);
-          failedInvoices.push({ name: memberInfo.name, id: memberInfo.id, reason: `Open invoice ${existingInvoice.id}` });
-          continue;
+        let existingInvoice = null;
+        if (!pdfOnly) {
+          existingInvoice = await findExistingOpenInvoice(hsClient, { contactId: memberInfo.contactId });
+          if (existingInvoice) {
+            logger.warn(`Skipping ${memberInfo.name} – open invoice ${existingInvoice.id} already exists.`);
+            failedInvoices.push({ name: memberInfo.name, id: memberInfo.id, reason: `Open invoice ${existingInvoice.id}` });
+            continue;
+          }
         }
 
         //-------------------------------------------------------------------
@@ -358,8 +391,8 @@ exports.handler = async (event, context) => {
         logger.info(`Paid through date for ${memberInfo.name}: ${paidThroughDate ? new Date(paidThroughDate).toISOString().split('T')[0] : 'Not found'}`);
         
         let createdInvoice;
-        if (isDryRun || testLimit) {                                  // Skip only dry-run and PDF-test
-          logger.info(`[DRY/PDF TEST RUN] Would create HubSpot Invoice for ${memberInfo.name}`);
+        if (isDryRun || testLimit || pdfOnly) {
+          logger.info(`[DRY/PDF TEST/ONLY PDF] Would create HubSpot Invoice for ${memberInfo.name}`);
           createdInvoice = { id: 'fake-invoice-id-test-run' };
         } else {
           createdInvoice = await createInvoice(hsClient, {
@@ -379,7 +412,7 @@ exports.handler = async (event, context) => {
         let paymentLink = null;
         let qrCodeDataUrl = null;
 
-        if (!isDryRun && !testLimit) {
+        if (!isDryRun && !testLimit && !pdfOnly) {
           // Fetch the payment link from HubSpot
           paymentLink = await getInvoicePaymentLink(hsClient, createdInvoice.id);
           
@@ -390,7 +423,7 @@ exports.handler = async (event, context) => {
             logger.warn(`No payment link available for invoice ${createdInvoice.id}`);
           }
         } else {
-          // For test/dry runs, use dummy data
+          // For test/dry runs or PDF-only mode, use dummy data
           paymentLink = 'https://app.hubspot.com/contacts/12345/objects/2-18/invoice/67890';
           qrCodeDataUrl = await generateQRCode(paymentLink);
         }
@@ -482,8 +515,8 @@ exports.handler = async (event, context) => {
         // H. UPDATE COMPANY DUES  (company only; skip in test/dry modes)
         //-------------------------------------------------------------------
         if (member.type === 'Company') {
-          if (isDryRun || testLimit) {                               // *** NEW
-            logger.info(`[DRY/PDF TEST RUN] Would update dues for Company ${memberInfo.companyId}`);
+          if (isDryRun || testLimit || pdfOnly) {
+            logger.info(`[DRY/PDF TEST/PDF ONLY] Would update dues for Company ${memberInfo.companyId}`);
           } else {
             await updateCompanyMembershipDues(hsClient, memberInfo.companyId, priceResult.totalPrice);
           }
@@ -503,7 +536,7 @@ exports.handler = async (event, context) => {
         });
 
         // Update processing state for this member
-        if (!isDryRun && !testLimit && !fullTestLimit) {
+        if (!isDryRun && !testLimit && !fullTestLimit && !pdfOnly) {
           processedMemberIds.push(memberInfo.id);
           // Update state every 10 members to avoid too frequent S3 writes
           if (processedInvoices.length % 10 === 0) {
@@ -572,7 +605,7 @@ exports.handler = async (event, context) => {
     logger.info('=== FINAL REPORTING SECTION COMPLETED ===');
 
     // Final state update
-    if (!isDryRun && !testLimit && !fullTestLimit && processedInvoices.length > 0) {
+    if (!isDryRun && !testLimit && !fullTestLimit && !pdfOnly && processedInvoices.length > 0) {
       logger.info('Performing final processing state update...');
       const isComplete = processedMemberIds.length >= allMembers.length;
       await storeProcessingState(processedMemberIds, runDate, {
