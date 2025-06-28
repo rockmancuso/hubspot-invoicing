@@ -117,3 +117,29 @@ The Lambda function will require configuration for:
 -   SES email addresses for notifications and reports
 
 (Further details to be added.)
+## React UI
+
+A lightweight React single-page application is located in the `ui/` directory. It provides two pages:
+
+- **Invoice List** – displays invoices retrieved from `/invoices` and provides links to view or download each invoice.
+- **Generate** – form interface to trigger the `/generate` endpoint with options for run type, limits and optional IDs.
+
+### Building and Deploying
+
+```bash
+cd ui
+npm install
+npm run build
+```
+
+Set the `S3_BUCKET` environment variable to your destination bucket and run:
+
+```bash
+npm run deploy
+```
+
+This syncs the `ui/dist` directory to the specified S3 bucket. If you use CloudFront, create an invalidation after syncing.
+
+### Environment Variables
+
+The UI reads the API base URL from `VITE_API_URL` at build time. Set this variable to the domain hosting the API endpoints (e.g. `https://api.example.com`).
