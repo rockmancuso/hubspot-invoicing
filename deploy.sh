@@ -31,6 +31,14 @@ echo "Step 2: Building lean package..."
 echo "--> Copying source files..."
 cp -r src/ "$PACKAGE_DIR/"
 cp package.json package-lock.json "$PACKAGE_DIR/"
+if [ -d handlers ]; then
+  echo "--> Copying additional handlers..."
+  cp -r handlers "$PACKAGE_DIR/"
+fi
+if [ -d ui ]; then
+  echo "--> Copying UI files..."
+  cp -r ui "$PACKAGE_DIR/"
+fi
 
 cd "$PACKAGE_DIR"
 

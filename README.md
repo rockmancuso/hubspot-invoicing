@@ -27,6 +27,10 @@ The Lambda function supports several testing modes that can be controlled via th
 - **`pdf_test_limit`**: Limits the number of members processed for PDF generation testing.
 - **`full_test_limit`**: Limits the number of members processed for full end-to-end testing.
 - **`keep_draft`**: When set to `true`, invoices are created but kept in "draft" status instead of being set to "open". This is useful for testing invoice creation without making them payable.
+- **`clear_state`**: Clears any stored processing state so a run starts fresh.
+- **`contact_id`**: Process only the specified contact ID.
+- **`company_id`**: Process only the specified company ID.
+- **`pdf_only`**: Generates the PDF invoice but does not create HubSpot records.
 
 ### Example Test Payloads
 
@@ -50,6 +54,18 @@ The Lambda function supports several testing modes that can be controlled via th
 {
   "keep_draft": true,
   "full_test_limit": 2
+}
+
+// Generate an invoice only for a specific contact
+{
+  "contact_id": "123",
+  "pdf_only": false
+}
+
+// Generate an invoice only for a specific company and skip HubSpot creation
+{
+  "company_id": "456",
+  "pdf_only": true
 }
 ```
 
@@ -87,7 +103,47 @@ The Lambda function supports several testing modes that can be controlled via th
 
 ## Setup and Deployment
 
-(Details to be added regarding AWS setup, environment variables, and deployment process.)
+The project is made up of two pieces: the invoice processing Lambda and a small
+web UI that calls a new API endpoint.  The UI can be hosted from an S3 bucket
+while the API is exposed through Amazon API Gateway which triggers this Lambda.
+
+### 1. Deploy the Lambda
+
+1. Run `./deploy.sh` to build the deployment package and upload it to AWS.
+2. Set the environment variables listed in the **Configuration** section on the
+   Lambda function.  Secrets such as the HubSpot API key should be stored in
+   **AWS Secrets Manager** and referenced by name.
+3. Increase the function timeout to at least five minutes so large batches can
+   complete.
+
+### 2. Deploy the UI
+
+1. Build the UI (from the `ui/` directory if present) with `npm run build`.
+2. Create an S3 bucket configured for static website hosting and upload the
+   contents of the build directory.
+3. (Optional) Front the bucket with a CloudFront distribution for HTTPS access.
+4. Update the API endpoint URL in the UI configuration to point to the API
+   Gateway stage created in the next step.
+
+### 3. Create the API Gateway Endpoint
+
+1. Create a new **HTTP API** in API Gateway.
+2. Add a `POST /generate` route that integrates with the Lambda function.
+3. Enable CORS so the static UI can call the API from the browser.
+4. Deploy the API to a stage and note the invoke URL.
+
+### 4. Example API Call
+
+```bash
+curl -X POST https://your-api-id.execute-api.us-east-1.amazonaws.com/prod/generate \
+  -d '{"contact_id":"123","pdf_only":true}'
+```
+
+This triggers the Lambda to generate a PDF for a single contact without creating
+records in HubSpot.
+
+For a deeper look at the required AWS resources see
+[`docs/API_INFRASTRUCTURE_GUIDE.md`](docs/API_INFRASTRUCTURE_GUIDE.md).
 
 ## Dependencies
 
