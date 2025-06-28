@@ -27,10 +27,13 @@ The Lambda function supports several testing modes that can be controlled via th
 - **`pdf_test_limit`**: Limits the number of members processed for PDF generation testing.
 - **`full_test_limit`**: Limits the number of members processed for full end-to-end testing.
 - **`keep_draft`**: When set to `true`, invoices are created but kept in "draft" status instead of being set to "open". This is useful for testing invoice creation without making them payable.
-- **`clear_state`**: Clears any stored processing state so a run starts fresh.
 - **`contact_id`**: Process only the specified contact ID.
 - **`company_id`**: Process only the specified company ID.
 - **`pdf_only`**: Generates the PDF invoice but does not create HubSpot records.
+- **`clear_state`**: Clears any stored processing state so a run starts fresh.
+- **`contact_id`**: Process only the single individual contact by HubSpot ID.
+- **`company_id`**: Process only the single company membership by HubSpot company ID.
+- **`pdf_only`**: Generate PDFs without creating invoices in HubSpot.
 
 ### Example Test Payloads
 
@@ -66,6 +69,16 @@ The Lambda function supports several testing modes that can be controlled via th
 {
   "company_id": "456",
   "pdf_only": true
+  
+// Process a single contact and generate PDF only
+{
+  "contact_id": "123",
+  "pdf_only": true
+}
+
+// Process a single company
+{
+  "company_id": "456"
 }
 ```
 
@@ -159,3 +172,29 @@ The Lambda function will require configuration for:
 -   SES email addresses for notifications and reports
 
 (Further details to be added.)
+## React UI
+
+A lightweight React single-page application is located in the `ui/` directory. It provides two pages:
+
+- **Invoice List** – displays invoices retrieved from `/invoices` and provides links to view or download each invoice.
+- **Generate** – form interface to trigger the `/generate` endpoint with options for run type, limits and optional IDs.
+
+### Building and Deploying
+
+```bash
+cd ui
+npm install
+npm run build
+```
+
+Set the `S3_BUCKET` environment variable to your destination bucket and run:
+
+```bash
+npm run deploy
+```
+
+This syncs the `ui/dist` directory to the specified S3 bucket. If you use CloudFront, create an invalidation after syncing.
+
+### Environment Variables
+
+The UI reads the API base URL from `VITE_API_URL` at build time. Set this variable to the domain hosting the API endpoints (e.g. `https://api.example.com`).

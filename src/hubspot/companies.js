@@ -169,10 +169,94 @@ const getExpiringCompanyMemberships = async (hubspotClient) => {
   }
 };
 
+/**
+ * Fetch membership data for a specific company ID and enrich with company details.
+ * Used for single-company processing.
+ */
+const getCompanyMembershipByCompanyId = async (hubspotClient, companyId) => {
+  const CUSTOM_OBJECT_TYPE_ID = '2-45511388';
+  const nextRenewalDateProperty = config.HUBSPOT_NEXT_RENEWAL_DATE_PROPERTY;
+
+  const membershipProps = [
+    'company_membership_name',
+    'company_name',
+    'status',
+    nextRenewalDateProperty,
+    config.HUBSPOT_DISTRIBUTOR_US_STATES_CHECKBOX_PROPERTY,
+    config.HUBSPOT_DISTRIBUTOR_CAN_PROVINCES_CHECKBOX_PROPERTY,
+    config.HUBSPOT_DISTRIBUTOR_NON_NA_TERRITORIES_CHECKBOX_PROPERTY,
+    config.HUBSPOT_MANUFACTURER_MEMBERSHIP_LEVEL_PROPERTY,
+  ].filter(Boolean);
+
+  try {
+    const assoc = await hubspotClient.crm.associations.v4.basicApi.getPage(
+      '0-2',
+      companyId,
+      CUSTOM_OBJECT_TYPE_ID,
+      undefined,
+      1
+    );
+
+    if (!assoc.results?.length) {
+      logger.warn(`No membership found for company ${companyId}`);
+      return null;
+    }
+
+    const membershipId = assoc.results[0].toObjectId;
+    const membership = await hubspotClient.crm.objects.basicApi.getById(
+      CUSTOM_OBJECT_TYPE_ID,
+      membershipId,
+      membershipProps
+    );
+
+    const company = await hubspotClient.crm.companies.basicApi.getById(companyId, [
+      'name',
+      'address',
+      'city',
+      'state',
+      'zip',
+      config.HUBSPOT_MEMBERSHIP_TYPE_PROPERTY,
+      'annual_sales_volume',
+      'number_of_territories',
+    ].filter(Boolean));
+
+    return {
+      id: membershipId,
+      companyId,
+      properties: {
+        company_membership_name: membership.properties.company_membership_name,
+        company_name: membership.properties.company_name,
+        status: membership.properties.status,
+        [nextRenewalDateProperty]: membership.properties[nextRenewalDateProperty],
+        name: company.properties.name,
+        address: company.properties.address,
+        city: company.properties.city,
+        state: company.properties.state,
+        zip: company.properties.zip,
+        [config.HUBSPOT_MEMBERSHIP_TYPE_PROPERTY]:
+          company.properties[config.HUBSPOT_MEMBERSHIP_TYPE_PROPERTY],
+        [config.HUBSPOT_MANUFACTURER_MEMBERSHIP_LEVEL_PROPERTY]:
+          membership.properties[config.HUBSPOT_MANUFACTURER_MEMBERSHIP_LEVEL_PROPERTY],
+        number_of_territories: company.properties.number_of_territories,
+        annual_sales_volume: company.properties.annual_sales_volume,
+        [config.HUBSPOT_DISTRIBUTOR_US_STATES_CHECKBOX_PROPERTY]:
+          membership.properties[config.HUBSPOT_DISTRIBUTOR_US_STATES_CHECKBOX_PROPERTY],
+        [config.HUBSPOT_DISTRIBUTOR_CAN_PROVINCES_CHECKBOX_PROPERTY]:
+          membership.properties[config.HUBSPOT_DISTRIBUTOR_CAN_PROVINCES_CHECKBOX_PROPERTY],
+        [config.HUBSPOT_DISTRIBUTOR_NON_NA_TERRITORIES_CHECKBOX_PROPERTY]:
+          membership.properties[config.HUBSPOT_DISTRIBUTOR_NON_NA_TERRITORIES_CHECKBOX_PROPERTY],
+      },
+    };
+  } catch (err) {
+    logger.error(`Error fetching membership for company ${companyId}:`, err.body || err.message);
+    throw err.body?.message ? new Error(`HubSpot API Error: ${err.body.message}`) : err;
+  }
+};
 // Alias for backward compatibility
 const getCompaniesWithExpiringMemberships = getExpiringCompanyMemberships;
 
 module.exports = {
   getExpiringCompanyMemberships,
   getCompaniesWithExpiringMemberships,
+  getCompanyMembershipByCompanyId,
 };
