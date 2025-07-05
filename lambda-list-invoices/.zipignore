@@ -1,0 +1,30 @@
+# Git files
+.git/
+.gitignore
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Development files
+deploy.sh
+package-lock.json
+README.md
+
+# Test files
+*.test.js
+*.spec.js
+test/
+tests/
+
+# IDE files
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.temp 

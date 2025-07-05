@@ -7,3 +7,7 @@ hubspot-invoicing-architecture.md
 .vscode
 temp
 response.json
+
+# Lambda deployment packages
+*.zip
+.serverless/

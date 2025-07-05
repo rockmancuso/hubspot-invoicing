@@ -109,7 +109,6 @@ The Lambda function supports several testing modes that can be controlled via th
 │   │   └── hubspot/
 │   └── integration/
 ├── package.json                # Project dependencies and scripts
-├── serverless.yml              # Optional: Infrastructure as Code (e.g., Serverless Framework)
 ├── hubspot-invoicing-architecture.md # Detailed architecture plan
 └── README.md                   # This file
 ```
@@ -148,7 +147,7 @@ while the API is exposed through Amazon API Gateway which triggers this Lambda.
 ### 4. Example API Call
 
 ```bash
-curl -X POST https://your-api-id.execute-api.us-east-1.amazonaws.com/prod/generate \
+curl -X POST https://vth5uby0o0.execute-api.us-east-1.amazonaws.com/prod/generate \
   -d '{"contact_id":"123","pdf_only":true}'
 ```
 

@@ -1,0 +1,30 @@
+{
+  "name": "hubspot-invoicing-download-invoice",
+  "version": "1.0.0",
+  "description": "AWS Lambda function to download invoice PDFs directly from S3.",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "keywords": [
+    "hubspot",
+    "invoice",
+    "lambda",
+    "aws",
+    "serverless",
+    "s3",
+    "download",
+    "pdf"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "aws-sdk": "^2.1641.0"
+  }
+} 

@@ -6,7 +6,7 @@
     "dev": "vite",
     "build": "vite build",
     "serve": "vite preview",
-    "deploy": "npm run build && aws s3 sync dist/ $S3_BUCKET --delete"
+    "deploy": "VITE_API_URL=https://vth5uby0o0.execute-api.us-east-1.amazonaws.com npm run build && aws s3 sync dist/ $S3_BUCKET --delete"
   },
   "dependencies": {
     "react": "^18.2.0",
